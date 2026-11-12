@@ -25,6 +25,7 @@ import java.io.ByteArrayOutputStream
 import android.speech.tts.TextToSpeech
 import android.speech.RecognitionListener
 import android.speech.SpeechRecognizer
+import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
 import java.util.Locale
@@ -55,6 +56,19 @@ class MainActivity : Activity() {
     private var listening = false
     private var pendingListen = false
     private val main = Handler(Looper.getMainLooper())
+    private var muted = false
+    private var errCount = 0
+
+    // 구글 음성 인식의 '삐릭' 소리는 듣는 동안만 꺼 둠 (끝나면 원래대로)
+    private val beepStreams = intArrayOf(AudioManager.STREAM_MUSIC, AudioManager.STREAM_SYSTEM, AudioManager.STREAM_NOTIFICATION)
+    private fun muteBeep(on: Boolean) {
+        if (muted == on) return
+        val am = getSystemService(AudioManager::class.java) ?: return
+        for (st in beepStreams) try {
+            am.adjustStreamVolume(st, if (on) AudioManager.ADJUST_MUTE else AudioManager.ADJUST_UNMUTE, 0)
+        } catch (e: Exception) { }
+        muted = on
+    }
     private var ttsReady = false
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -142,6 +156,7 @@ class MainActivity : Activity() {
 
     private fun endListen() {
         listening = false
+        main.postDelayed({ if (!listening) muteBeep(false) }, 400)
         try { sr?.destroy() } catch (e: Exception) { }
         sr = null
         js("window.onVoiceState&&window.onVoiceState(false)")
@@ -171,15 +186,25 @@ class MainActivity : Activity() {
             override fun onEvent(eventType: Int, params: Bundle?) {}
             override fun onPartialResults(b: Bundle?) {
                 val t = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: return
+                errCount = 0
                 if (t.isNotBlank()) js("window.onVoicePartial&&window.onVoicePartial(${JSONObject.quote(t)})")
             }
             override fun onResults(b: Bundle?) {
                 val t = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
-                if (t.isNotBlank()) js("window.onVoiceFinal&&window.onVoiceFinal(${JSONObject.quote(t)})")
+                if (t.isNotBlank()) { errCount = 0; js("window.onVoiceFinal&&window.onVoiceFinal(${JSONObject.quote(t)})") }
                 if (listening) relisten() else endListen()
             }
             override fun onError(error: Int) {
                 if (!listening) { endListen(); return }
+                // 계속 실패하면(인터넷 끊김 등) 무한 반복하지 말고 멈춤
+                errCount++
+                if (errCount >= 8 || error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) {
+                    if (errCount >= 8 || error != SpeechRecognizer.ERROR_NO_MATCH) {
+                        endListen()
+                        Toast.makeText(this@MainActivity, "잘 안 들려요. 인터넷을 확인하고 다시 눌러 주세요 / Tente de novo", Toast.LENGTH_LONG).show()
+                        return
+                    }
+                }
                 when (error) {
                     SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> relisten()
                     SpeechRecognizer.ERROR_RECOGNIZER_BUSY, SpeechRecognizer.ERROR_CLIENT -> { try { sr?.cancel() } catch (e: Exception) {}; relisten(400) }
@@ -189,6 +214,8 @@ class MainActivity : Activity() {
             }
         })
         listening = true
+        errCount = 0
+        muteBeep(true)
         js("window.onVoiceState&&window.onVoiceState(true)")
         try { sr!!.startListening(listenIntent()) } catch (e: Exception) { endListen() }
     }
@@ -216,6 +243,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        muteBeep(false)
         try { sr?.destroy() } catch (e: Exception) { }
         tts?.shutdown()
         super.onDestroy()
