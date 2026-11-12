@@ -547,8 +547,8 @@ function render(){
   const al=alertsList();
   $("badge").style.display=al.length?"block":"none"; $("badge").textContent=al.length;
   $("alerts").innerHTML = al.length? al.map(a=>`
-    <div class="alert ${a.lv===2?"a-red":"a-orange"}"><div class="em">${emojiOf(a.it)}</div>
-    <div class="grow"><b>${esc(a.t)}</b><span class="muted">${esc(a.d)}</span></div>
+    <div class="alert ${a.lv===2?"a-red":"a-orange"}" data-alert="${a.it.id}" data-lv="${a.lv}" style="cursor:pointer"><div class="em">${emojiOf(a.it)}</div>
+    <div class="grow"><b>${esc(a.t)}</b><span class="muted">${esc(a.d)}</span><div style="font-size:12px;color:var(--blue);margin-top:2px">🔎 ${L("눌러서 검색","Toque para pesquisar")}</div></div>
     ${a.it.cat==="home"?`<button class="btn-ghost btn-sm" data-rebuy="${a.it.id}">${L("샀어요","Comprei")}</button>`:
       (a.lv===2?`<div style="display:flex;flex-direction:column;gap:4px"><button class="btn-ghost btn-sm" data-ok="${a.it.id}">${L("괜찮아요","Está bom")}</button><button class="btn-red btn-sm" data-trash="${a.it.id}">🗑️ ${L("버렸어요","Joguei")}</button></div>`:"")}</div>`).join("")
     : (state.items.length? `<div class="alert a-ok"><div class="em">😊</div><div><b>${L("지금은 걱정 없어요","Tudo certo por agora")}</b><span class="muted">${L(`떨어지기 ${s.warnDays}일 전, 매일 ${local.notifyHour}시에 핸드폰으로 알려드려요.`,`Aviso no celular ${s.warnDays} dia(s) antes, todo dia às ${local.notifyHour}h.`)}</span></div></div>`
@@ -643,6 +643,30 @@ function useSums(mo){ const U=state.usage.filter(u=>u.date.slice(0,7)===mo); con
   return {ate,waste,nAte:U.filter(u=>!u.waste).length,nWaste:U.filter(u=>u.waste).length}; }
 function throwAway(it){ const q=it.qty; recordUse(it,q,true); it.qty=0; addLog("ate",L(`${it.name} ${r1(q)}${unitOf(it)} 버림`,`${it.name} ${r1(q)} jogado fora`)); save(); render(); toast(L("버린 것으로 적었어요. 다음엔 꼭 먹어요 💪","Anotado. Da próxima vez a gente aproveita 💪")); }
 function stillOk(it){ it.shelf=(it.shelf||7)+3; save(); render(); toast(L("3일 더 지켜볼게요","Mais 3 dias")); }
+
+// ================= 알림 눌러서 검색 =================
+function alertSearch(it,lv){
+  const ko=it.name, pt=ptName(it.name);
+  const g=q=>"https://www.google.com/search?q="+encodeURIComponent(q);
+  const yt=q=>"https://www.youtube.com/results?search_query="+encodeURIComponent(q);
+  const opts = it.cat==="food" ? [
+      ["🍳",L(`${ko} 요리법 찾기`,`Receitas com ${pt}`),g(L(`${ko} 요리 레시피`,`receita com ${pt}`))],
+      ["▶️",L(`유튜브에서 ${ko} 요리 보기`,`Vídeos de receita com ${pt}`),yt(L(`${ko} 요리`,`receita ${pt}`))],
+      ["🇰🇷",L(`${ko} 한식 레시피`,`Comida coreana com ${pt}`),g(L(`${ko} 한식 반찬 레시피`,`receita coreana com ${pt}`))],
+      ["🧊",L(`${ko} 오래 보관하는 법`,`Como conservar ${pt}`),g(L(`${ko} 보관법 오래`,`como conservar ${pt} por mais tempo`))],
+      ...(lv===2?[["⚠️",L(`${ko} 상했는지 확인하는 법`,`Como saber se ${pt} estragou`),g(L(`${ko} 상했는지 확인 방법`,`como saber se ${pt} estragou`))]]:[])
+    ] : [
+      ["🏷️",L(`${ko} 할인 찾기`,`Ofertas de ${pt}`),g(`oferta ${pt} supermercado encarte São Paulo`)],
+      ["🛒",L(`${ko} 온라인 가격 비교`,`Comparar preço de ${pt}`),g(`${pt} preço comprar`)],
+      ["💡",L(`${ko} 아껴 쓰는 법`,`Como economizar ${pt}`),g(L(`${ko} 아껴 쓰는 법`,`como economizar ${pt}`))]
+    ];
+  openModal(`<h3>${emojiOf(it)} ${esc(ko)}</h3><p class="muted">${L("무엇을 찾아볼까요?","O que quer pesquisar?")}</p>
+    ${opts.map((o,i)=>`<button class="btn-ghost full" style="text-align:left;margin:6px 0;font-size:17px" data-sopt="${i}">${o[0]} ${esc(o[1])}</button>`).join("")}
+    <div class="two"><button class="btn-ghost" id="mCancel">${L("닫기","Fechar")}</button><button class="btn-green" id="sEdit">✏️ ${L("수정하기","Editar")}</button></div>`);
+  modal.querySelectorAll("[data-sopt]").forEach(b=>b.onclick=()=>{openUrl(opts[+b.dataset.sopt][2]);closeModal();});
+  $("mCancel").onclick=closeModal;
+  $("sEdit").onclick=()=>{closeModal();editItem(it);};
+}
 
 // ================= 내가 산 가격 =================
 const unitPrice=p=>(+p.price>0&&+p.qty>0)?(+p.price)/(+p.qty):0;
@@ -1372,6 +1396,7 @@ document.addEventListener("click",e=>{
   const ed=e.target.closest("[data-edit]"); if(ed){editItem(state.items.find(x=>x.id===ed.dataset.edit));return;}
   const ad=e.target.closest("[data-add]"); if(ad){editItem(null,ad.dataset.add);return;}
   const rb=e.target.closest("[data-rebuy]"); if(rb){rebuy(state.items.find(x=>x.id===rb.dataset.rebuy));return;}
+  const al=e.target.closest("[data-alert]"); if(al&&!e.target.closest("button")){const it=state.items.find(x=>x.id===al.dataset.alert);if(it)alertSearch(it,+al.dataset.lv);return;}
   const tr=e.target.closest("[data-trash]"); if(tr){const it=state.items.find(x=>x.id===tr.dataset.trash);if(it)throwAway(it);return;}
   const okb=e.target.closest("[data-ok]"); if(okb){const it=state.items.find(x=>x.id===okb.dataset.ok);if(it)stillOk(it);return;}
   const ck=e.target.closest("[data-cook]"); if(ck){cookSuggestion(+ck.dataset.cook);return;}
