@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">집 도우미</string>
+    <string name="sc_talk">🎤 말하기</string>
+    <string name="sc_diary">📔 말로 일기</string>
 </resources>

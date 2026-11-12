@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Ajudante da Casa</string>
+    <string name="sc_talk">🎤 Falar</string>
+    <string name="sc_diary">📔 Diário falado</string>
 </resources>

@@ -39,6 +39,8 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- 앱 아이콘 꾹 누르면: 말하기 / 말로 일기 -->
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
 
         <!-- QR 스캐너를 앱 설치할 때 미리 받아 두기 -->

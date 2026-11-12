@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="talk" android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/sc_talk">
+        <intent android:action="com.juya.salim.TALK"
+            android:targetPackage="com.juya.salim"
+            android:targetClass="com.juya.salim.MainActivity" />
+    </shortcut>
+    <shortcut android:shortcutId="diary" android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/sc_diary">
+        <intent android:action="com.juya.salim.DIARY"
+            android:targetPackage="com.juya.salim"
+            android:targetClass="com.juya.salim.MainActivity" />
+    </shortcut>
+</shortcuts>

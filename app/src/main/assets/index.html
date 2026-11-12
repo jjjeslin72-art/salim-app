@@ -220,6 +220,11 @@
       <p class="muted" data-pt="No papel higiênico, deixo 1 rolo reservado para cada banheiro.">화장지는 화장실마다 1롤씩 걸어둘 것까지 생각해서 계산해요.</p>
     </div>
     <div class="card">
+      <h2>🗣️ <span data-pt="Falar como com um amigo">친구처럼 부르기</span></h2>
+      <p class="muted" style="margin:0 0 8px" data-pt="Diga &quot;Ok Google, abrir Ajudante da Casa&quot;. O app abre, responde &quot;Pode falar&quot; e já escuta. Para o diário, comece com &quot;diário…&quot;.">"오케이 구글, 집 도우미 열어 줘"라고 하면 앱이 열리면서 "네, 말씀하세요" 하고 바로 들어요. 일기는 "일기, 오늘은…" 하고 말하면 돼요.</p>
+      <div id="friendBox"></div>
+    </div>
+    <div class="card">
       <h2>👪 <span data-pt="Usar junto com a família">가족과 같이 쓰기</span></h2>
       <div id="famBox"></div>
     </div>
@@ -1256,7 +1261,7 @@ function answerLocal(q){
   // 아는 물건 이름인데 등록이 안 된 경우
   const names=[...Object.keys(SHELF),...Object.keys(HOME),...Object.keys(ALIAS)].sort((a,b)=>b.length-a.length);
   const named=names.find(n=>n.length>=2&&t.includes(n.toLowerCase()));
-  if(named) return (yn?L("아니요, ","Não, "):"")+L(`${named}는 지금 등록된 게 없어요. 사셨으면 '샀어요'로 넣어 주세요.`,`Não tem ${named} cadastrado. Se comprou, use 'Comprei'.`);
+  if(named) return (yn?L("아니요, ","Não, "):"")+L(`${named}는 지금 등록된 게 없어요. 사셨으면 "샀어"라고 말해 주세요.`,`Não tem ${named} cadastrado. Se comprou, diga "comprei".`);
   return null;
 }
 async function onAsk(){
@@ -1313,7 +1318,7 @@ function renderDiary(){
     ${past.length?`<label class="f">${L("지난 일기","Dias anteriores")}</label>${past.map(d=>{const x=state.diary[d];return `<div class="dline" data-dgo="${d}"><b>${md(d)}</b> ${x.mood||""}${x.weather||""} <span class="muted">${esc((x.text||"").slice(0,40))}${(x.text||"").length>40?"…":""}</span></div>`;}).join("")}`:""}`;
   $("diarySave").onclick=()=>{saveDiary(true);};
   $("diaryText").onblur=()=>saveDiary(false);
-  $("diaryMic").onclick=()=>{ if(!APP){toast(L("핸드폰 앱에서 돼요. 키보드의 🎤도 돼요","Use o 🎤 do teclado"));return;} if(voiceOn&&voiceTarget==="diary") stopVoice(); else startVoice("diary"); };
+  $("diaryMic").onclick=()=>{ if(!APP){toast(L("핸드폰 앱에서 돼요. 키보드의 🎤도 돼요","Use o 🎤 do teclado"));return;} if(voiceOn&&(voiceTarget==="diary"||voiceTarget==="diaryAuto")) stopVoice(); else startVoice("diary"); };
   paintMic();
 }
 function saveDiary(show){
@@ -1502,31 +1507,84 @@ $("bReset").onclick=function(){
 };
 // ---- 말하기: 멈춤을 누를 때까지 계속 듣기 ----
 let voiceOn=false, voiceTarget="say", voiceBase="";
-const voiceEl=()=>voiceTarget==="diary"?$("diaryText"):$("say");
+const voiceEl=()=>(voiceTarget==="diary"||voiceTarget==="diaryAuto")?$("diaryText"):$("say");
 function startVoice(target){
   if(!APP) return;
   if(voiceOn) stopVoice();
   voiceTarget=target; const el=voiceEl(); voiceBase=el?el.value.trim():"";
-  try{ Android.startListen(); }catch(e){ Android.startVoice(); }
+  const auto=target==="friend"||target==="diaryAuto";
+  if(target==="friend"&&el){ el.value=""; voiceBase=""; }
+  try{ auto?Android.startListenMode("auto"):Android.startListen(); }catch(e){ try{Android.startListen();}catch(e2){Android.startVoice();} }
 }
 function stopVoice(){ try{Android.stopListen();}catch(e){} }
 function paintMic(){
-  const m=$("mic"); if(m){ const on=voiceOn&&voiceTarget==="say"; m.innerHTML=on?`⏹️ ${L("다 말했어요","Terminei")}`:`🎤 ${L("말하기","Falar")}`; m.className=on?"btn-red":"soft-blue"; }
-  const d=$("diaryMic"); if(d){ const on=voiceOn&&voiceTarget==="diary"; d.innerHTML=on?`⏹️ ${L("다 말했어요","Terminei")}`:`🎤 ${L("말로 쓰기","Ditar")}`; d.className=on?"btn-red":"soft-blue"; }
+  const m=$("mic"); if(m){ const on=voiceOn&&(voiceTarget==="say"||voiceTarget==="friend"); m.innerHTML=on?`⏹️ ${L("다 말했어요","Terminei")}`:`🎤 ${L("말하기","Falar")}`; m.className=on?"btn-red":"soft-blue"; }
+  const d=$("diaryMic"); if(d){ const on=voiceOn&&(voiceTarget==="diary"||voiceTarget==="diaryAuto"); d.innerHTML=on?`⏹️ ${L("다 말했어요","Terminei")}`:`🎤 ${L("말로 쓰기","Ditar")}`; d.className=on?"btn-red":"soft-blue"; }
 }
-window.onVoiceState=on=>{ voiceOn=!!on; paintMic(); if(on) toast(L("듣고 있어요… 다 말하면 ⏹️를 누르세요","Ouvindo… toque ⏹️ quando terminar"),3500);
-  else { const el=voiceEl(); if(el){ voiceBase=el.value.trim(); if(voiceTarget==="diary") saveDiary(false); } } };
+window.onVoiceState=on=>{ voiceOn=!!on; paintMic();
+  if(on){ toast(voiceTarget==="friend"||voiceTarget==="diaryAuto"?L("👂 듣고 있어요…","👂 Ouvindo…"):L("듣고 있어요… 다 말하면 ⏹️를 누르세요","Ouvindo… toque ⏹️ quando terminar"),3500); return; }
+  const el=voiceEl(); if(!el) return; voiceBase=el.value.trim();
+  if(voiceTarget==="diary") saveDiary(false);
+  else if(voiceTarget==="diaryAuto"){ voiceTarget="say"; const e=diaryOf(today()); if(diaryDate!==today()){diaryDate=today();}
+    applyDiaryVoice(e,""); speak(L("오늘 일기에 적었어요","Anotei no seu diário")); diaryUse(e); }
+  else if(voiceTarget==="friend"){ voiceTarget="say"; friendSaid(el.value.trim()); } };
 window.onVoicePartial=t=>{ const el=voiceEl(); if(el) el.value=(voiceBase?voiceBase+" ":"")+t; };
 window.onVoiceFinal=t=>{ if(!t) return; voiceBase=(voiceBase?voiceBase+" ":"")+t.trim(); const el=voiceEl(); if(el) el.value=voiceBase; };
-$("mic").onclick=()=>{ if(!APP){toast(L("핸드폰 앱에서 쓸 수 있어요. 키보드의 🎤도 돼요","Use o 🎤 do teclado"));return;} if(voiceOn&&voiceTarget==="say") stopVoice(); else startVoice("say"); };
+$("mic").onclick=()=>{ if(!APP){toast(L("핸드폰 앱에서 쓸 수 있어요. 키보드의 🎤도 돼요","Use o 🎤 do teclado"));return;} if(voiceOn&&(voiceTarget==="say"||voiceTarget==="friend")) stopVoice(); else startVoice("say"); };
 window.onVoice=text=>{ if(window.voiceMode==="ask"){window.voiceMode="";$("say").value=text;onAsk();return;}
   if(window.voiceMode==="diary"){window.voiceMode="";const t=$("diaryText");if(t){t.value=(t.value.trim()?t.value.trim()+" ":"")+text;saveDiary(false);}return;}
   if(window.voiceMode==="smart"){window.voiceMode="";$("say").value=text;onSmart();return;} $("say").value=($("say").value.trim()?$("say").value.trim()+" ":"")+text; toast(L("들었어요: ","Ouvi: ")+text); };
 
+// ================= 친구처럼 부르기 =================
+const speak=t=>{ if(APP) try{Android.speak(t);}catch(e){} };
+if(local.voiceOnOpen===undefined) local.voiceOnOpen=true;
+function renderFriend(){
+  const b=$("friendBox"); if(!b) return;
+  b.innerHTML=`<label class="f">${L("앱을 열면 바로 듣기","Escutar ao abrir o app")}</label>
+    <div class="seg"><button data-fr="1" class="${local.voiceOnOpen?"on":""}">${L("켜기","Ligado")}</button><button data-fr="0" class="${!local.voiceOnOpen?"on":""}">${L("끄기","Desligado")}</button></div>
+    <div class="two"><button class="btn-blue" id="frTry">🗣️ ${L("지금 해 보기","Testar agora")}</button><button class="btn-ghost" id="frDiary">📔 ${L("말로 일기","Diário falado")}</button></div>
+    <p class="muted" style="margin:8px 0 0">${L("앱 아이콘을 꾹 누르면 '말하기', '말로 일기' 바로가기도 있어요. 화면이 잠겨 있으면 먼저 잠금을 풀어야 열려요.","Segure o ícone do app para os atalhos 'Falar' e 'Diário falado'. Com a tela bloqueada, desbloqueie primeiro.")}</p>`;
+}
+document.addEventListener("click",e=>{
+  const f=e.target.closest("[data-fr]"); if(f){local.voiceOnOpen=f.dataset.fr==="1";saveLocal();renderFriend();return;}
+  if(e.target.closest("#frTry")) window.onAppOpen("talk");
+  if(e.target.closest("#frDiary")) window.onAppOpen("diary");
+});
+// 말 속 기분·날씨 알아듣기
+function moodFrom(t){ return /너무\s*좋|행복|기뻐|기쁘|신나|최고|좋았|맛있/.test(t)?"😄":/슬퍼|슬펐|우울|속상/.test(t)?"😢":/화나|화났|짜증/.test(t)?"😠":/피곤|졸려|힘들/.test(t)?"😴":/아파|아팠|감기|목이/.test(t)?"🤒":/괜찮|그냥|보통/.test(t)?"😐":/좋|feliz|ótimo/.test(t)?"🙂":/triste/.test(t)?"😢":/cansad/.test(t)?"😴":""; }
+function weatherFrom(t){ return /천둥|번개|폭우|tempestade/.test(t)?"⛈️":/비\s*(가|와|왔|옴|오)|비 오|chuva|chov/.test(t)?"🌧️":/더워|더웠|덥다|calor/.test(t)?"🥵":/추워|추웠|춥다|frio/.test(t)?"🥶":/흐려|흐렸|구름|nublado/.test(t)?"⛅":/맑|햇살|화창|sol\b/.test(t)?"☀️":""; }
+function applyDiaryVoice(e,add){
+  const t=$("diaryText"); let text=(t?t.value:e.text||"").trim();
+  if(add) text=(text?text+" ":"")+add;
+  e.text=text; if(!e.mood) e.mood=moodFrom(text); if(!e.weather) e.weather=weatherFrom(text);
+  state.diary[today()]=e; save(); renderDiary();
+}
+function friendSaid(text){
+  if(!text){ speak(L("잘 못 들었어요. 다시 불러 주세요","Não ouvi bem. Tente de novo")); return; }
+  // "일기, 오늘은…" → 일기
+  const dm=text.match(/^\s*(일기|오늘\s*일기|diário|diario)\s*(써\s*줘|쓸게|에|는|,|:)?\s*(.*)$/i) || (/일기\s*(써|에\s*적어|적어)/.test(text)?[null,null,null,text.replace(/일기\s*(써\s*줘|에\s*적어\s*줘|적어\s*줘)?/,"").trim()]:null);
+  if(dm){ const body=(dm[3]||"").trim(); $("say").value="";
+    if(!body){ speak(L("오늘 일기를 말씀하세요","Conte como foi seu dia")); setTimeout(()=>startVoice("diaryAuto"),1700); return; }
+    diaryDate=today(); const e=diaryOf(today()); applyDiaryVoice(e,body); speak(L("오늘 일기에 적었어요","Anotei no seu diário")); diaryUse(e);
+    $("diaryCard").scrollIntoView({behavior:"smooth"}); return; }
+  $("say").value=text;
+  if(RE_BUY.test(text)||RE_USE.test(text)) speak(L("이렇게 넣을까요? 확인을 눌러 주세요","Posso salvar assim? Toque para confirmar"));
+  onSmart();
+}
+window.onAppOpen=mode=>{
+  mode=mode||(local.voiceOnOpen?"talk":""); if(!mode||!APP) return;
+  closeModal(); showTab("v-home");
+  if(mode==="diary"){ diaryDate=today(); renderDiary(); $("diaryCard").scrollIntoView({behavior:"smooth"}); speak(L("오늘 일기를 말씀하세요","Conte como foi seu dia")); setTimeout(()=>startVoice("diaryAuto"),1700); }
+  else { speak(L("네, 말씀하세요","Sim, pode falar")); setTimeout(()=>startVoice("friend"),1500); }
+};
+
 applyLang();
 render();
+renderFriend();
 pushAlarm();
 save(true); // 처음 열 때도 핸드폰 알림 목록 맞추기
+// 앱을 열었을 때 (오케이 구글로 열었거나 바로가기)
+setTimeout(()=>{ if(APP){ let m=""; try{m=Android.launchMode();}catch(e){} if(m!=="none") window.onAppOpen(m); } },600);
 </script>
 </body>
 </html>

@@ -58,6 +58,14 @@ class MainActivity : Activity() {
     private val main = Handler(Looper.getMainLooper())
     private var muted = false
     private var errCount = 0
+    private var autoMode = false   // 친구 모드: 말이 끝나면 혼자 멈춤
+    private var launch = ""         // 바로가기로 열었을 때 talk / diary
+
+    private fun modeOf(i: Intent?): String = when (i?.action) {
+        "com.juya.salim.TALK" -> "talk"
+        "com.juya.salim.DIARY" -> "diary"
+        else -> ""
+    }
 
     // 구글 음성 인식의 '삐릭' 소리는 듣는 동안만 꺼 둠 (끝나면 원래대로)
     private val beepStreams = intArrayOf(AudioManager.STREAM_MUSIC, AudioManager.STREAM_SYSTEM, AudioManager.STREAM_NOTIFICATION)
@@ -116,6 +124,7 @@ class MainActivity : Activity() {
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
+        launch = modeOf(intent)
         Notifier.ensureChannel(this)
         Notifier.scheduleNext(this)
 
@@ -137,6 +146,17 @@ class MainActivity : Activity() {
     private fun js(code: String) = web.evaluateJavascript(code, null)
 
     private fun listenIntent(): Intent {
+        if (autoMode) {
+            val pt = Notifier.prefs(this).getString("lang", "ko") == "pt"
+            return Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (pt) "pt-BR" else "ko-KR")
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
+            }
+        }
         val pt = Notifier.prefs(this).getString("lang", "ko") == "pt"
         return Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -162,7 +182,8 @@ class MainActivity : Activity() {
         js("window.onVoiceState&&window.onVoiceState(false)")
     }
 
-    fun beginListen() {
+    fun beginListen(auto: Boolean = false) {
+        autoMode = auto
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             pendingListen = true
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 2)
@@ -192,10 +213,11 @@ class MainActivity : Activity() {
             override fun onResults(b: Bundle?) {
                 val t = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
                 if (t.isNotBlank()) { errCount = 0; js("window.onVoiceFinal&&window.onVoiceFinal(${JSONObject.quote(t)})") }
-                if (listening) relisten() else endListen()
+                if (listening && !autoMode) relisten() else endListen()
             }
             override fun onError(error: Int) {
                 if (!listening) { endListen(); return }
+                if (autoMode && (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT)) { endListen(); return }
                 // 계속 실패하면(인터넷 끊김 등) 무한 반복하지 말고 멈춤
                 errCount++
                 if (errCount >= 8 || error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) {
@@ -231,7 +253,7 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 2) {
-            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED && pendingListen) beginListen()
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED && pendingListen) beginListen(autoMode)
             else if (pendingListen) Toast.makeText(this, "마이크를 허용해야 말로 입력할 수 있어요 / Permita o microfone", Toast.LENGTH_LONG).show()
             pendingListen = false
         }
@@ -247,6 +269,14 @@ class MainActivity : Activity() {
         try { sr?.destroy() } catch (e: Exception) { }
         tts?.shutdown()
         super.onDestroy()
+    }
+
+    // 앱이 이미 켜져 있을 때 "오케이 구글, 집 도우미 열어" 또는 바로가기로 다시 열면
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val m = modeOf(intent)
+        if (::web.isInitialized) js("window.onAppOpen&&window.onAppOpen('$m')")
     }
 
     override fun onResume() {
@@ -386,6 +416,14 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun stopListen() { runOnUiThread { finishListen() } }
 
+        /** 친구 모드: "auto" 면 말이 끝나면 혼자 멈춤 */
+        @JavascriptInterface
+        fun startListenMode(mode: String) { runOnUiThread { beginListen(mode == "auto") } }
+
+        /** 바로가기로 열었는지 (한 번만 알려줌) */
+        @JavascriptInterface
+        fun launchMode(): String { val m = launch; launch = "none"; return m }
+
         /** 영수증 QR 코드 찍기 → 세무서 페이지 가져오기 */
         @JavascriptInterface
         fun scanQr() {
@@ -503,6 +541,7 @@ class MainActivity : Activity() {
         fun speak(text: String) {
             runOnUiThread {
                 val pt = Notifier.pt(this@MainActivity)
+                if (!listening) muteBeep(false)
                 val go = {
                     tts?.language = if (pt) Locale("pt", "BR") else Locale.KOREAN
                     tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "ans")
