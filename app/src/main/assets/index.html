@@ -162,6 +162,7 @@
     </div>
     <div class="card">
       <div class="row"><h2 class="grow" style="margin:0">🥬 <span data-pt="Alimentos">식재료</span></h2><button class="btn-ghost btn-sm" data-add="food" data-pt="＋ Adicionar">＋ 직접 추가</button></div>
+      <p class="muted" style="margin:6px 0 0" data-pt="Toque para editar · segure para apagar">눌러서 수정 · 꾹 누르면 삭제</p>
       <div id="foodList"></div>
     </div>
   </section>
@@ -171,6 +172,7 @@
     <div class="card">
       <div class="row"><h2 class="grow" style="margin:0">🧻 <span data-pt="Casa e higiene">생활용품</span></h2><button class="btn-ghost btn-sm" data-add="home" data-pt="＋ Adicionar">＋ 직접 추가</button></div>
       <p class="muted" style="margin:6px 0 0" data-pt="Calculo o uso diário pelo tamanho da família e aviso quando comprar de novo.">가족 수로 하루 쓰는 양을 계산해서, 다시 사야 할 날을 알려드려요.</p>
+      <p class="muted" style="margin:2px 0 0" data-pt="Toque para editar · segure para apagar">눌러서 수정 · 꾹 누르면 삭제</p>
       <div id="homeList"></div>
     </div>
   </section>
@@ -1317,8 +1319,71 @@ function renderDiary(){
 function saveDiary(show){
   const t=$("diaryText"); if(!t) return;
   const e=diaryOf(diaryDate); e.text=t.value; state.diary[diaryDate]=e;
-  save(); if(show){toast(L("일기를 저장했어요 📔","Diário salvo 📔"));renderDiary();}
+  save(); if(show){toast(L("일기를 저장했어요 📔","Diário salvo 📔"));renderDiary();diaryUse(e);}
 }
+// 일기에 "생선전 해 먹었어"처럼 쓰면 → 그 재료를 먹은 걸로 빼 줄지 물어보기 (같은 글은 한 번만)
+function mentionedFoods(text){
+  const t=text.toLowerCase();
+  return state.items.filter(it=>it.cat==="food"&&it.qty>0&&(()=>{const c=canon(it.name);
+    return t.includes(it.name.toLowerCase())||t.includes(c)||Object.entries(ALIAS).some(([k,v])=>v===c&&k.length>=2&&t.includes(k.toLowerCase()));})());
+}
+async function diaryUse(e){
+  const text=(e.text||"").trim(); if(!text||e.usedFor===text) return;
+  const clauses=splitClauses(text).filter(c=>RE_USE.test(c));
+  if(!clauses.length) return;
+  const useText=clauses.join(" ");
+  const foods=state.items.filter(i=>i.cat==="food"&&i.qty>0); if(!foods.length) return;
+  let used=estimateUse(useText,foods).used;
+  // 음식 이름 없이 재료만 말한 경우 (예: 생선전) → 한 끼 분량으로
+  for(const it of mentionedFoods(useText)){
+    if(used.find(u=>u.it.id===it.id)) continue;
+    const q=/kg/i.test(it.unit||"")?Math.min(it.qty,0.5*state.settings.people/4):Math.min(it.qty,it.qty<=2?it.qty:Math.max(1,Math.round(state.settings.people/2)));
+    used.push({it,qty:Math.round(q*10)/10,why:L("일기","diário")});
+  }
+  if(hasAI()){
+    try{
+      const j=await withTimeout(FB_AI(`가족 ${state.settings.people}명. 재고: ${JSON.stringify(foods.map(f=>({name:f.name,qty:r1(f.qty),unit:f.unit||"개"})))}
+(망가=망고, 마멍=파파야, 생선전=생선으로 만든 전)
+일기 내용: """${text}"""
+일기에서 오늘 해먹거나 먹은 음식을 찾아, 이 가족이 한 끼에 보통 쓰는 재료 양(평균치)을 재고에서 뺄 양으로 알려줘. 재고에 있는 것만, name은 재고 이름 그대로, 재고 이하. 먹은 게 없으면 빈 배열.
+JSON: {"used":[{"name":"","qty":1,"why":"${L("짧게","curto")}"}]}`),20000);
+      if(Array.isArray(j.used)){ const u=j.used.map(x=>({it:foods.find(f=>f.name===x.name)||foods.find(f=>x.name&&canon(f.name)===canon(x.name)),qty:+x.qty||0,why:x.why||""})).filter(x=>x.it&&x.qty>0).map(x=>({...x,qty:Math.min(x.qty,x.it.qty)}));
+        if(u.length) used=u; }
+    }catch(err){ console.warn(err); }
+  }
+  if(!used.length) return;
+  const done=()=>{ e.usedFor=text; state.diary[diaryDate]=e; save(); };
+  showUsePreview(used,"📔 "+text.slice(0,40),L("일기에서 해먹은 걸 찾았어요. 맞으면 '빼기'를 눌러 주세요.","Achei no diário o que você comeu. Se estiver certo, toque em 'Descontar'."),done);
+}
+// ---- 꾹 누르기 (0.6초) → 삭제 ----
+let lpTimer=null, lpFired=false, lpX=0, lpY=0;
+function lpTarget(el){ return el&&el.closest&&el.closest("[data-edit],[data-purchase]"); }
+function lpStart(ev){ const t=lpTarget(ev.target); if(!t) return; lpFired=false; const p=ev.touches?ev.touches[0]:ev; lpX=p.clientX; lpY=p.clientY;
+  clearTimeout(lpTimer); t.style.transition="background .6s"; t.style.background="#fde6e3";
+  lpTimer=setTimeout(()=>{ lpFired=true; t.style.background=""; try{navigator.vibrate&&navigator.vibrate(40);}catch(e){} askDelete(t); },600); }
+function lpCancel(){ clearTimeout(lpTimer); lpTimer=null; document.querySelectorAll("[data-edit],[data-purchase]").forEach(x=>x.style.background=""); }
+document.addEventListener("touchstart",lpStart,{passive:true});
+document.addEventListener("touchmove",ev=>{const p=ev.touches[0];if(Math.abs(p.clientX-lpX)>10||Math.abs(p.clientY-lpY)>10)lpCancel();},{passive:true});
+document.addEventListener("touchend",lpCancel); document.addEventListener("touchcancel",lpCancel);
+document.addEventListener("mousedown",lpStart); document.addEventListener("mouseup",lpCancel);
+document.addEventListener("contextmenu",ev=>{ if(lpTarget(ev.target)) ev.preventDefault(); });
+// 꾹 누른 뒤 손 뗄 때 생기는 '클릭'은 무시
+document.addEventListener("click",ev=>{ if(lpFired){ lpFired=false; ev.stopPropagation(); ev.preventDefault(); } },true);
+function askDelete(el){
+  let name="", kind="", id="";
+  if(el.dataset.edit){ const it=state.items.find(x=>x.id===el.dataset.edit); if(!it) return; name=it.name; kind="item"; id=it.id; }
+  else { const p=state.purchases.find(x=>x.id===el.dataset.purchase); if(!p) return; name=`${p.name} (${md(p.date)} ${brl(p.price)})`; kind="purchase"; id=p.id; }
+  openModal(`<h3>🗑️ ${L("삭제할까요?","Apagar?")}</h3><p style="font-size:18px;font-weight:700">${esc(name)}</p>
+    <p class="muted">${kind==="item"?L("냉장고·생활용품 목록에서 지워져요.","Sai da lista de alimentos/casa."):L("가계부 기록에서 지워져요.","Sai dos gastos.")}</p>
+    <div class="two"><button class="btn-ghost" id="mCancel">${L("취소","Cancelar")}</button><button class="btn-red" id="mOk" style="background:var(--red);color:#fff">${L("삭제","Apagar")}</button></div>`);
+  $("mCancel").onclick=closeModal;
+  $("mOk").onclick=()=>{
+    if(kind==="item"){ state.items=state.items.filter(x=>x.id!==id); delete state.shopChecked["a:"+id]; addLog("edit",L(`${name} 삭제`,`${name} apagado`)); }
+    else state.purchases=state.purchases.filter(x=>x.id!==id);
+    save(); render(); closeModal(); toast(L("삭제했어요","Apagado"));
+  };
+}
+
 document.addEventListener("click",ev=>{
   const m=ev.target.closest("[data-mood]"); if(m){saveDiary(false);const e=diaryOf(diaryDate);e.mood=e.mood===m.dataset.mood?"":m.dataset.mood;state.diary[diaryDate]=e;save();renderDiary();return;}
   const w=ev.target.closest("[data-weather]"); if(w){saveDiary(false);const e=diaryOf(diaryDate);e.weather=e.weather===w.dataset.weather?"":w.dataset.weather;state.diary[diaryDate]=e;save();renderDiary();return;}
