@@ -999,7 +999,8 @@ function homeUseLocal(text){
 }
 async function onSmart(){
   const text=$("say").value.trim();
-  if(!text){ if(APP){window.voiceMode="smart";Android.startVoice();} else toast(L("말하거나 적어 주세요","Fale ou escreva")); return; }
+  if(!text){ if(APP){ if(!voiceOn) startVoice("say"); } else toast(L("말하거나 적어 주세요","Fale ou escreva")); return; }
+  if(voiceOn) stopVoice();
   let buy=[], used=[], question="", comment="";
   // 1) 내 핸드폰 안에서 먼저 나누기
   const buyC=[], useC=[], qC=[];
@@ -1234,7 +1235,7 @@ function answerLocal(q){
 }
 async function onAsk(){
   const q=$("say").value.trim();
-  if(!q){ if(APP){window.voiceMode="ask";Android.startVoice();} else toast(L("물어볼 것을 적어 주세요","Escreva a pergunta")); return; }
+  if(!q){ if(APP){ if(!voiceOn) startVoice("say"); } else toast(L("물어볼 것을 적어 주세요","Escreva a pergunta")); return; }
   let ans=answerLocal(q);
   if(!ans && hasAI()){
     const btn=$("bGo"); busy(btn,true,L("생각 중","Pensando"));
@@ -1257,7 +1258,7 @@ JSON: {"answer":"..."}`),25000);
   openModal(`<h3>❓ ${esc(q)}</h3><div style="font-size:19px;line-height:1.6;white-space:pre-line;background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px">${esc(ans)}</div>
   <div class="two"><button class="btn-ghost" id="mCancel">${L("닫기","Fechar")}</button><button class="btn-blue" id="mAgain">🎤 ${L("또 물어보기","Perguntar de novo")}</button></div>`);
   $("mCancel").onclick=closeModal;
-  $("mAgain").onclick=()=>{closeModal();$("say").value="";if(APP){window.voiceMode="ask";Android.startVoice();}else $("say").focus();};
+  $("mAgain").onclick=()=>{closeModal();$("say").value="";if(APP){startVoice("say");}else $("say").focus();};
   $("say").value="";
   if(APP) try{Android.speak(ans);}catch(e){}
 }
@@ -1286,7 +1287,8 @@ function renderDiary(){
     ${past.length?`<label class="f">${L("지난 일기","Dias anteriores")}</label>${past.map(d=>{const x=state.diary[d];return `<div class="dline" data-dgo="${d}"><b>${md(d)}</b> ${x.mood||""}${x.weather||""} <span class="muted">${esc((x.text||"").slice(0,40))}${(x.text||"").length>40?"…":""}</span></div>`;}).join("")}`:""}`;
   $("diarySave").onclick=()=>{saveDiary(true);};
   $("diaryText").onblur=()=>saveDiary(false);
-  $("diaryMic").onclick=()=>{ if(APP){window.voiceMode="diary";Android.startVoice();} else toast(L("핸드폰 앱에서 돼요. 키보드의 🎤도 돼요","Use o 🎤 do teclado")); };
+  $("diaryMic").onclick=()=>{ if(!APP){toast(L("핸드폰 앱에서 돼요. 키보드의 🎤도 돼요","Use o 🎤 do teclado"));return;} if(voiceOn&&voiceTarget==="diary") stopVoice(); else startVoice("diary"); };
+  paintMic();
 }
 function saveDiary(show){
   const t=$("diaryText"); if(!t) return;
@@ -1408,7 +1410,25 @@ $("bReset").onclick=function(){
   if(!this.dataset.sure){this.dataset.sure="1";this.textContent=L("정말 다 지울까요? 한 번 더 누르세요","Apagar tudo? Toque de novo");return;}
   state=fresh();save();render();this.dataset.sure="";applyLang();toast(L("새로 시작해요","Recomeçando"));
 };
-$("mic").onclick=()=>{ window.voiceMode=$("say").value.trim()?"":"smart"; if(APP) Android.startVoice(); else toast(L("핸드폰 앱에서 쓸 수 있어요. 키보드의 🎤도 돼요","Use o 🎤 do teclado")); };
+// ---- 말하기: 멈춤을 누를 때까지 계속 듣기 ----
+let voiceOn=false, voiceTarget="say", voiceBase="";
+const voiceEl=()=>voiceTarget==="diary"?$("diaryText"):$("say");
+function startVoice(target){
+  if(!APP) return;
+  if(voiceOn) stopVoice();
+  voiceTarget=target; const el=voiceEl(); voiceBase=el?el.value.trim():"";
+  try{ Android.startListen(); }catch(e){ Android.startVoice(); }
+}
+function stopVoice(){ try{Android.stopListen();}catch(e){} }
+function paintMic(){
+  const m=$("mic"); if(m){ const on=voiceOn&&voiceTarget==="say"; m.innerHTML=on?`⏹️ ${L("다 말했어요","Terminei")}`:`🎤 ${L("말하기","Falar")}`; m.className=on?"btn-red":"soft-blue"; }
+  const d=$("diaryMic"); if(d){ const on=voiceOn&&voiceTarget==="diary"; d.innerHTML=on?`⏹️ ${L("다 말했어요","Terminei")}`:`🎤 ${L("말로 쓰기","Ditar")}`; d.className=on?"btn-red":"soft-blue"; }
+}
+window.onVoiceState=on=>{ voiceOn=!!on; paintMic(); if(on) toast(L("듣고 있어요… 다 말하면 ⏹️를 누르세요","Ouvindo… toque ⏹️ quando terminar"),3500);
+  else { const el=voiceEl(); if(el){ voiceBase=el.value.trim(); if(voiceTarget==="diary") saveDiary(false); } } };
+window.onVoicePartial=t=>{ const el=voiceEl(); if(el) el.value=(voiceBase?voiceBase+" ":"")+t; };
+window.onVoiceFinal=t=>{ if(!t) return; voiceBase=(voiceBase?voiceBase+" ":"")+t.trim(); const el=voiceEl(); if(el) el.value=voiceBase; };
+$("mic").onclick=()=>{ if(!APP){toast(L("핸드폰 앱에서 쓸 수 있어요. 키보드의 🎤도 돼요","Use o 🎤 do teclado"));return;} if(voiceOn&&voiceTarget==="say") stopVoice(); else startVoice("say"); };
 window.onVoice=text=>{ if(window.voiceMode==="ask"){window.voiceMode="";$("say").value=text;onAsk();return;}
   if(window.voiceMode==="diary"){window.voiceMode="";const t=$("diaryText");if(t){t.value=(t.value.trim()?t.value.trim()+" ":"")+text;saveDiary(false);}return;}
   if(window.voiceMode==="smart"){window.voiceMode="";$("say").value=text;onSmart();return;} $("say").value=($("say").value.trim()?$("say").value.trim()+" ":"")+text; toast(L("들었어요: ","Ouvi: ")+text); };

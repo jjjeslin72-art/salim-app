@@ -23,6 +23,10 @@ import android.webkit.WebResourceResponse
 import androidx.webkit.WebViewAssetLoader
 import java.io.ByteArrayOutputStream
 import android.speech.tts.TextToSpeech
+import android.speech.RecognitionListener
+import android.speech.SpeechRecognizer
+import android.os.Handler
+import android.os.Looper
 import java.util.Locale
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
@@ -46,6 +50,11 @@ class MainActivity : Activity() {
     private val SOUND_REQ = 9
     private var camUri: Uri? = null
     private var tts: TextToSpeech? = null
+    // 계속 듣기 (멈춤 누를 때까지)
+    private var sr: SpeechRecognizer? = null
+    private var listening = false
+    private var pendingListen = false
+    private val main = Handler(Looper.getMainLooper())
     private var ttsReady = false
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -111,7 +120,103 @@ class MainActivity : Activity() {
     @Deprecated("old devices")
     override fun onBackPressed() { handleBack() }
 
+    private fun js(code: String) = web.evaluateJavascript(code, null)
+
+    private fun listenIntent(): Intent {
+        val pt = Notifier.prefs(this).getString("lang", "ko") == "pt"
+        return Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (pt) "pt-BR" else "ko-KR")
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
+            // 잠깐 쉬어도 끊지 말라고 부탁 (안 듣는 폰도 있어서 아래에서 다시 켜 줌)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 5000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 5000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 15000L)
+        }
+    }
+
+    private fun relisten(delay: Long = 120) {
+        main.postDelayed({ if (listening) try { sr?.startListening(listenIntent()) } catch (e: Exception) { endListen() } }, delay)
+    }
+
+    private fun endListen() {
+        listening = false
+        try { sr?.destroy() } catch (e: Exception) { }
+        sr = null
+        js("window.onVoiceState&&window.onVoiceState(false)")
+    }
+
+    fun beginListen() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            pendingListen = true
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 2)
+            return
+        }
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            // 계속 듣기가 안 되는 폰 → 예전 방식
+            val i = listenIntent()
+            try { @Suppress("DEPRECATION") startActivityForResult(i, VOICE_REQ) } catch (e: Exception) {
+                Toast.makeText(this, "이 핸드폰에서는 음성 입력을 쓸 수 없어요", Toast.LENGTH_LONG).show() }
+            return
+        }
+        try { sr?.destroy() } catch (e: Exception) { }
+        sr = SpeechRecognizer.createSpeechRecognizer(this)
+        sr!!.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {}
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {}
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+            override fun onPartialResults(b: Bundle?) {
+                val t = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: return
+                if (t.isNotBlank()) js("window.onVoicePartial&&window.onVoicePartial(${JSONObject.quote(t)})")
+            }
+            override fun onResults(b: Bundle?) {
+                val t = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
+                if (t.isNotBlank()) js("window.onVoiceFinal&&window.onVoiceFinal(${JSONObject.quote(t)})")
+                if (listening) relisten() else endListen()
+            }
+            override fun onError(error: Int) {
+                if (!listening) { endListen(); return }
+                when (error) {
+                    SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> relisten()
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY, SpeechRecognizer.ERROR_CLIENT -> { try { sr?.cancel() } catch (e: Exception) {}; relisten(400) }
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> endListen()
+                    else -> relisten(600)
+                }
+            }
+        })
+        listening = true
+        js("window.onVoiceState&&window.onVoiceState(true)")
+        try { sr!!.startListening(listenIntent()) } catch (e: Exception) { endListen() }
+    }
+
+    fun finishListen() {
+        if (!listening) { endListen(); return }
+        listening = false
+        try { sr?.stopListening() } catch (e: Exception) { }
+        // 마지막 말이 들어올 시간을 조금 줌
+        main.postDelayed({ if (!listening) endListen() }, 1500)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 2) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED && pendingListen) beginListen()
+            else if (pendingListen) Toast.makeText(this, "마이크를 허용해야 말로 입력할 수 있어요 / Permita o microfone", Toast.LENGTH_LONG).show()
+            pendingListen = false
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (listening) finishListen()
+    }
+
     override fun onDestroy() {
+        try { sr?.destroy() } catch (e: Exception) { }
         tts?.shutdown()
         super.onDestroy()
     }
@@ -245,6 +350,13 @@ class MainActivity : Activity() {
                 }
             }
         }
+
+        /** 말하기 시작 — 멈춤(stopListen) 누를 때까지 계속 들음 */
+        @JavascriptInterface
+        fun startListen() { runOnUiThread { beginListen() } }
+
+        @JavascriptInterface
+        fun stopListen() { runOnUiThread { finishListen() } }
 
         /** 영수증 QR 코드 찍기 → 세무서 페이지 가져오기 */
         @JavascriptInterface
