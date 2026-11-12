@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>살림 알리미</title>
+<style>
+  :root{
+    --bg:#fbf6ee; --card:#ffffff; --ink:#2b2420; --sub:#7a6e64; --line:#eadfce;
+    --green:#3f8f5a; --green-soft:#e3f1e6; --orange:#e07a2f; --orange-soft:#fcebdc;
+    --red:#d2453b; --red-soft:#fbe2df; --blue:#3a6fb0; --blue-soft:#e1ebf7; --r:18px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans KR","Noto Sans CJK KR",system-ui,sans-serif;font-size:17px;line-height:1.45}
+  body{padding-bottom:84px}
+  header{padding:16px 18px 4px}
+  header h1{font-size:24px;margin:0;letter-spacing:-.5px}
+  header p{margin:2px 0 0;color:var(--sub);font-size:14px}
+  main{padding:4px 14px;max-width:640px;margin:0 auto}
+  .view{display:none}.view.on{display:block}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin:12px 0}
+  .card h2{font-size:18px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+  .muted{color:var(--sub);font-size:14px}
+  textarea{width:100%;min-height:92px;border:2px solid var(--line);border-radius:14px;padding:12px 14px;font:inherit;resize:vertical;background:#fffdf9}
+  textarea:focus,input:focus,select:focus{outline:none;border-color:var(--green)}
+  .row{display:flex;gap:10px;align-items:center}
+  .grow{flex:1;min-width:0}
+  button{font:inherit;border:0;border-radius:14px;padding:13px 16px;font-weight:700;cursor:pointer}
+  button:active{transform:scale(.98)}
+  .btn-green{background:var(--green);color:#fff}
+  .btn-orange{background:var(--orange);color:#fff}
+  .btn-blue{background:var(--blue);color:#fff}
+  .btn-ghost{background:#f3ece1;color:var(--ink)}
+  .btn-red{background:var(--red-soft);color:var(--red)}
+  .btn-sm{padding:8px 12px;font-size:15px;border-radius:12px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+  .mic{width:100%;margin-top:10px;background:var(--blue-soft);color:var(--blue)}
+  .alert{display:flex;gap:12px;align-items:center;padding:12px;border-radius:14px;margin:8px 0}
+  .alert .em{font-size:26px;line-height:1}
+  .alert b{display:block}
+  .a-red{background:var(--red-soft)} .a-orange{background:var(--orange-soft)} .a-ok{background:var(--green-soft)}
+  .item{display:flex;gap:12px;align-items:center;padding:12px 2px;border-bottom:1px dashed var(--line)}
+  .item:last-child{border-bottom:0}
+  .item .em{font-size:30px;width:40px;text-align:center;flex:none}
+  .item .nm{font-weight:700}
+  .item .meta{font-size:13px;color:var(--sub)}
+  .pill{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:4px;vertical-align:1px}
+  .p-red{background:var(--red-soft);color:var(--red)} .p-orange{background:var(--orange-soft);color:var(--orange)} .p-green{background:var(--green-soft);color:var(--green)}
+  .qty{font-size:24px;font-weight:800;min-width:56px;text-align:right}
+  .qty small{font-size:13px;color:var(--sub);font-weight:400}
+  .bar{height:7px;background:#f1e8da;border-radius:9px;overflow:hidden;margin-top:6px}
+  .bar i{display:block;height:100%;border-radius:9px}
+  .loc{font-size:14px;font-weight:700;color:var(--sub);margin:14px 0 2px;padding-top:6px;border-top:1px solid var(--line)}
+  .loc:first-of-type{border-top:0;margin-top:4px}
+  nav{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);display:flex;padding:6px 4px;z-index:5}
+  nav button{flex:1;background:none;padding:6px 0;border-radius:12px;font-size:12px;font-weight:600;color:var(--sub);display:flex;flex-direction:column;align-items:center;gap:1px;position:relative}
+  nav button span{font-size:21px}
+  nav button.on{color:var(--ink);background:#f6efe4}
+  nav .badge{position:absolute;top:1px;right:calc(50% - 22px);background:var(--red);color:#fff;font-size:11px;border-radius:99px;min-width:18px;height:18px;line-height:18px;padding:0 5px;font-style:normal}
+  .modal-bg{position:fixed;inset:0;background:rgba(40,30,20,.45);display:none;align-items:flex-end;justify-content:center;z-index:10}
+  .modal-bg.on{display:flex}
+  .modal{background:var(--bg);width:100%;max-width:640px;max-height:90vh;overflow:auto;border-radius:22px 22px 0 0;padding:18px 16px 22px}
+  .modal h3{margin:0 0 6px;font-size:19px}
+  .prow{display:flex;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px;margin:8px 0}
+  .prow input[type=number]{width:72px}
+  input,select{font:inherit;border:2px solid var(--line);border-radius:12px;padding:9px 10px;background:#fff;min-width:0;color:var(--ink)}
+  input[type=checkbox]{width:24px;height:24px;accent-color:var(--green);flex:none}
+  label.f{display:block;margin:10px 0 4px;font-size:14px;color:var(--sub)}
+  .full{width:100%}
+  .toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-size:15px;opacity:0;transition:.25s;pointer-events:none;z-index:20;max-width:90%;text-align:center}
+  .toast.on{opacity:1}
+  .empty{text-align:center;color:var(--sub);padding:18px 6px}
+  .stat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .stat div{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px;text-align:center}
+  .stat b{display:block;font-size:22px}
+  .stat span{font-size:12px;color:var(--sub)}
+  .logline{font-size:14px;padding:8px 0;border-bottom:1px dashed var(--line)}
+  .stepper{display:flex;align-items:center;gap:10px}
+  .stepper button{width:44px;height:44px;padding:0;font-size:22px;background:#f3ece1}
+  .stepper b{font-size:22px;min-width:34px;text-align:center}
+  .shop{display:flex;gap:12px;align-items:center;padding:11px 2px;border-bottom:1px dashed var(--line)}
+  .shop.done .nm{text-decoration:line-through;color:var(--sub)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .chips button{padding:6px 10px;font-size:14px;font-weight:600;background:#f3ece1;border-radius:99px}
+  .seg{display:flex;background:#f3ece1;border-radius:12px;padding:3px;gap:3px}
+  .seg button{flex:1;padding:9px 4px;font-size:15px;background:none;border-radius:10px}
+  .seg button.on{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🏠 살림 알리미</h1>
+  <p id="sub"></p>
+</header>
+
+<main>
+  <!-- 알림/홈 -->
+  <section class="view on" id="v-home">
+    <div class="card">
+      <h2>🗣️ 말로 알려주세요</h2>
+      <textarea id="say" placeholder="예) 오이 5개, 망가 5개, 마멍 5개, 사과 5개, 당근 5개, 호박 2개, 감자 5개, 양파 7개 샀어&#10;예) 오늘 김치찌개랑 오이무침 해먹었어"></textarea>
+      <button class="mic" id="mic">🎤 눌러서 말하기</button>
+      <div class="two">
+        <button class="btn-green" id="bBuy">🛒 샀어요</button>
+        <button class="btn-orange" id="bAte">🍳 해먹었어요</button>
+      </div>
+      <p class="muted" style="margin:10px 0 0">'해먹었어요'를 누르면 음식에 보통 들어가는 재료를 가족 수에 맞춰 평균치로 빼 드려요.</p>
+    </div>
+
+    <div class="card">
+      <h2>🔔 알림</h2>
+      <div id="alerts"></div>
+    </div>
+
+    <div class="stat" id="stats"></div>
+
+    <div class="card">
+      <h2>📝 최근 기록</h2>
+      <div id="log"></div>
+    </div>
+  </section>
+
+  <!-- 냉장고 -->
+  <section class="view" id="v-food">
+    <div class="card">
+      <div class="row"><h2 class="grow" style="margin:0">🥬 식재료</h2><button class="btn-ghost btn-sm" data-add="food">＋ 직접 추가</button></div>
+      <div id="foodList"></div>
+    </div>
+  </section>
+
+  <!-- 생활용품 -->
+  <section class="view" id="v-home2">
+    <div class="card">
+      <div class="row"><h2 class="grow" style="margin:0">🧻 생활용품</h2><button class="btn-ghost btn-sm" data-add="home">＋ 직접 추가</button></div>
+      <p class="muted" style="margin:6px 0 0">가족 수로 하루 쓰는 양을 계산해서, 다시 사야 할 날을 알려드려요.</p>
+      <div id="homeList"></div>
+    </div>
+  </section>
+
+  <!-- 장보기 -->
+  <section class="view" id="v-shop">
+    <div class="card">
+      <h2>🛍️ 장보기 목록</h2>
+      <p class="muted" style="margin:0 0 6px">떨어져 가는 물건이 저절로 들어와요. 필요한 건 직접 더 넣어도 돼요.</p>
+      <div class="row"><input id="shopNew" class="grow" placeholder="예) 우유, 쌀"><button class="btn-ghost btn-sm" id="shopAdd">넣기</button></div>
+      <div id="shopList"></div>
+      <div class="two">
+        <button class="btn-ghost" id="shopClear">체크한 것 지우기</button>
+        <button class="btn-green" id="shopSend">📤 왓츠앱으로 보내기</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 설정 -->
+  <section class="view" id="v-set">
+    <div class="card">
+      <h2>👨‍👩‍👧‍👦 우리 집 정보</h2>
+      <label class="f">가족 수</label>
+      <div class="stepper"><button data-step="people:-1">−</button><b id="sPeople"></b><span>명</span><button data-step="people:1">＋</button></div>
+      <label class="f">화장실 수</label>
+      <div class="stepper"><button data-step="bathrooms:-1">−</button><b id="sBath"></b><span>개</span><button data-step="bathrooms:1">＋</button></div>
+      <p class="muted">화장지는 화장실마다 1롤씩 걸어둘 것까지 생각해서 계산해요.</p>
+    </div>
+    <div class="card">
+      <h2>⏰ 알림</h2>
+      <label class="f">매일 알림 받을 시간</label>
+      <div class="stepper"><button data-step="notifyHour:-1">−</button><b id="sHour"></b><span>시</span><button data-step="notifyHour:1">＋</button></div>
+      <label class="f">다 떨어지기 며칠 전에 알려줄까요</label>
+      <div class="stepper"><button data-step="warnDays:-1">−</button><b id="sWarn"></b><span>일 전</span><button data-step="warnDays:1">＋</button></div>
+      <button class="btn-blue full" id="bTest" style="margin-top:14px">🔔 알림 지금 시험해 보기</button>
+    </div>
+    <div class="card">
+      <h2>💾 저장</h2>
+      <p class="muted">이 핸드폰 안에 저장돼요.</p>
+      <button class="btn-red btn-sm" id="bReset">전체 지우고 새로 시작</button>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button class="on" data-tab="v-home"><span>🔔</span>알림<i class="badge" id="badge" style="display:none"></i></button>
+  <button data-tab="v-food"><span>🥬</span>냉장고</button>
+  <button data-tab="v-home2"><span>🧻</span>생활용품</button>
+  <button data-tab="v-shop"><span>🛍️</span>장보기<i class="badge" id="badge2" style="display:none"></i></button>
+  <button data-tab="v-set"><span>⚙️</span>설정</button>
+</nav>
+
+<div class="modal-bg" id="mbg"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ================= 기본 데이터 =================
+// 같은 재료를 다르게 부르는 이름 → 기준 이름
+const ALIAS = {"망가":"망고","manga":"망고","마멍":"파파야","마몽":"파파야","mamão":"파파야","mamao":"파파야","애호박":"호박","단호박":"호박","달걀":"계란","파":"대파","쪽파":"대파",
+  "사과":"사과","당근":"당근","감자":"감자","양파":"양파","오이":"오이","토마토":"토마토","바나나":"바나나","두부":"두부","버섯":"버섯","양배추":"양배추"};
+const canon = n => { n=String(n||"").trim(); const l=n.toLowerCase(); return ALIAS[n]||ALIAS[l]||n; };
+
+const SHELF = { // 보관 시 대략 신선 기간(일) — 기준 이름으로
+  "오이":7,"망고":5,"파파야":5,"사과":21,"당근":21,"호박":10,"감자":30,"양파":30,"고구마":21,"토마토":7,"상추":5,"배추":14,"대파":10,
+  "두부":5,"계란":21,"우유":7,"고기":3,"돼지고기":3,"소고기":3,"닭고기":2,"닭":2,"생선":2,"새우":2,"바나나":5,"딸기":3,"마늘":30,"고추":10,
+  "버섯":5,"브로콜리":7,"시금치":4,"무":14,"양배추":14,"레몬":21,"라임":21,"오렌지":14,"포도":5,"수박":5,"치즈":21,"요거트":10,"햄":7,
+  "키위":14,"배":21,"멜론":7,"아보카도":5,"깻잎":5,"콩나물":3,"김치":60,"파인애플":5,"귤":14,"빵":4,"떡":3,"어묵":5,"소시지":10
+};
+const ROOM = ["감자","양파","마늘","고구마","바나나","빵"]; // 실온 보관 기본
+const EMO = {"오이":"🥒","망고":"🥭","파파야":"🍈","사과":"🍎","당근":"🥕","호박":"🎃","감자":"🥔","양파":"🧅","고구마":"🍠","토마토":"🍅","상추":"🥬","배추":"🥬",
+  "대파":"🌿","두부":"⬜","계란":"🥚","우유":"🥛","고기":"🥩","돼지고기":"🥓","소고기":"🥩","닭고기":"🍗","닭":"🍗","생선":"🐟","새우":"🦐","바나나":"🍌","딸기":"🍓",
+  "마늘":"🧄","고추":"🌶️","버섯":"🍄","브로콜리":"🥦","시금치":"🥬","레몬":"🍋","라임":"🍋","오렌지":"🍊","포도":"🍇","수박":"🍉","치즈":"🧀","키위":"🥝","배":"🍐",
+  "멜론":"🍈","아보카도":"🥑","김치":"🥬","햄":"🥓","파인애플":"🍍","귤":"🍊","빵":"🍞","떡":"🍡","어묵":"🍢","소시지":"🌭","요거트":"🥣",
+  "화장지":"🧻","휴지":"🧻","두루마리":"🧻","키친타올":"🧻","물티슈":"🧻","치약":"🪥","칫솔":"🪥","샴푸":"🧴","린스":"🧴","바디워시":"🧴","로션":"🧴","선크림":"🧴",
+  "화장품":"💄","스킨":"🧴","비누":"🧼","세제":"🧺","세탁세제":"🧺","섬유유연제":"🧺","주방세제":"🧽","수세미":"🧽","쓰레기봉투":"🗑️","면도기":"🪒","생리대":"🩷","기저귀":"👶","쌀":"🍚"};
+// 생활용품: personDays = 한 사람이 1개를 며칠 쓰는지 / dpu = 집 전체가 1개를 며칠 쓰는지
+const HOME = {
+  "화장지":{personDays:3.5,unit:"롤"},"휴지":{personDays:3.5,unit:"롤"},"두루마리":{personDays:3.5,unit:"롤"},
+  "치약":{personDays:45,unit:"개"},"칫솔":{personDays:90,unit:"개"},"샴푸":{personDays:60,unit:"통"},"린스":{personDays:75,unit:"통"},
+  "바디워시":{personDays:60,unit:"통"},"비누":{personDays:30,unit:"개"},"로션":{personDays:60,unit:"통"},"선크림":{personDays:60,unit:"개"},
+  "화장품":{personDays:60,unit:"개"},"스킨":{personDays:60,unit:"통"},"면도기":{personDays:30,unit:"개"},
+  "세제":{dpu:30,unit:"통"},"세탁세제":{dpu:30,unit:"통"},"섬유유연제":{dpu:40,unit:"통"},"주방세제":{dpu:30,unit:"통"},
+  "키친타올":{dpu:7,unit:"롤"},"물티슈":{dpu:7,unit:"팩"},"쓰레기봉투":{dpu:10,unit:"묶음"},"수세미":{dpu:20,unit:"개"},"생리대":{dpu:30,unit:"팩"},
+  "기저귀":{dpu:3,unit:"팩"},"쌀":{dpu:20,unit:"포대"}
+};
+// 음식 1번 해먹을 때 4인 가족 기준 평균 재료 (기준 이름)
+const RECIPES = {
+  "김치찌개":{"양파":0.5,"두부":1,"대파":0.5},
+  "된장찌개":{"호박":0.5,"감자":1,"양파":0.5,"두부":1,"고추":1,"대파":0.5},
+  "순두부":{"양파":0.5,"계란":2,"호박":0.3,"대파":0.5},
+  "부대찌개":{"양파":1,"대파":0.5,"소시지":3,"햄":1},
+  "오이무침":{"오이":2},"오이냉국":{"오이":2},"오이소박이":{"오이":5},"피클":{"오이":4},
+  "감자볶음":{"감자":3,"양파":0.5,"당근":0.5},"감자조림":{"감자":4},"감자전":{"감자":4},"감자튀김":{"감자":4},
+  "감자샐러드":{"감자":4,"오이":1,"당근":0.5,"계란":2},"감자국":{"감자":2,"양파":0.5,"대파":0.5},
+  "카레":{"감자":3,"당근":1,"양파":2},"짜장":{"감자":2,"양파":2,"호박":0.5},
+  "호박전":{"호박":1,"계란":2},"호박볶음":{"호박":1,"양파":0.5},"호박죽":{"호박":1},"호박스프":{"호박":1,"양파":0.5},
+  "볶음밥":{"당근":0.5,"양파":1,"계란":4,"호박":0.3},"김밥":{"오이":1,"당근":1,"계란":4},
+  "계란말이":{"계란":5,"당근":0.3,"대파":0.3},"계란후라이":{"계란":4},"계란찜":{"계란":4,"대파":0.2},"오믈렛":{"계란":6,"양파":0.5},
+  "잡채":{"당근":1,"양파":1,"시금치":0.5,"버섯":3},"불고기":{"양파":1,"당근":0.5,"대파":0.5},
+  "제육볶음":{"양파":1,"당근":0.5,"대파":0.5,"고추":2},"닭볶음탕":{"감자":3,"당근":1,"양파":1,"대파":0.5},
+  "떡볶이":{"양파":0.5,"대파":0.5,"계란":2,"어묵":2},"라면":{"계란":2,"대파":0.3},
+  "비빔밥":{"오이":1,"당근":1,"호박":0.5,"계란":4,"시금치":0.5},"샐러드":{"오이":1,"토마토":2,"상추":0.5,"당근":0.5},
+  "과일샐러드":{"사과":1,"망고":1,"바나나":2},"스튜":{"감자":3,"당근":1,"양파":1},"수프":{"감자":2,"당근":1,"양파":1},"스프":{"감자":2,"당근":1,"양파":1},
+  "사과주스":{"사과":3},"망고주스":{"망고":2},"망고스무디":{"망고":2},"파파야스무디":{"파파야":1},"바나나우유":{"바나나":2},
+  "당근라페":{"당근":3},"당근주스":{"당근":3},"스파게티":{"토마토":3,"양파":1},"토마토소스":{"토마토":4,"양파":1},
+  "페이조아다":{"양파":1},"스트로가노프":{"양파":1,"버섯":3},"생선구이":{"레몬":0.5},"미역국":{},"배추김치":{"배추":2,"무":0.5,"대파":1},
+  "전":{"호박":0.5,"감자":1,"계란":2},"동그랑땡":{"두부":1,"양파":0.5,"당근":0.3,"계란":2},"야채볶음":{"양파":1,"당근":1,"호박":0.5}
+};
+// 비슷하게 부르는 음식 이름 → 위 표 이름
+const DISH_ALIAS = {"김치찌게":"김치찌개","된장국":"된장찌개","된장찌게":"된장찌개","순두부찌개":"순두부","오이 무침":"오이무침","카레라이스":"카레","짜장면":"짜장","짜장밥":"짜장",
+  "애호박전":"호박전","애호박볶음":"호박볶음","계란 후라이":"계란후라이","후라이":"계란후라이","에그":"계란후라이","닭도리탕":"닭볶음탕","샐러드":"샐러드",
+  "feijoada":"페이조아다","strogonoff":"스트로가노프","스트로고노프":"스트로가노프","vitamina":"바나나우유","비타미나":"바나나우유","파스타":"스파게티","볶음":"야채볶음"};
+const BLANK = {settings:{people:4,bathrooms:2,warnDays:3,notifyHour:9}, items:[], log:[], shop:[], shopChecked:{}};
+
+// ================= 날짜 =================
+const pad=n=>String(n).padStart(2,"0");
+const fmt=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const today=()=>fmt(new Date());
+const dnum=s=>{const [y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d).getTime();};
+const diff=(a,b)=>Math.round((dnum(b)-dnum(a))/86400000);
+const addDays=(s,n)=>{const [y,m,d]=s.split("-").map(Number);return fmt(new Date(y,m-1,d+Math.floor(n)));};
+const md=s=>{const [,m,d]=s.split("-");return (+m)+"월 "+(+d)+"일";};
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const r1=n=>Math.round(n*10)/10;
+const uid=()=>Math.random().toString(36).slice(2,10);
+const APP = !!(window.Android && Android.isApp);
+
+// ================= 저장 =================
+const fresh=()=>JSON.parse(JSON.stringify(BLANK));
+let state=fresh();
+try{
+  const raw = APP ? Android.loadState() : localStorage.getItem("salim");
+  if(raw){const s=JSON.parse(raw); state=Object.assign(fresh(),s); state.settings=Object.assign(fresh().settings,s.settings||{});}
+}catch(e){}
+
+function save(){
+  const json=JSON.stringify(state);
+  if(APP){ try{Android.saveState(json, JSON.stringify(schedule()), state.settings.notifyHour);}catch(e){} }
+  else { try{localStorage.setItem("salim",json);}catch(e){} }
+}
+
+// ================= 계산 =================
+const findKey=(name,table)=>{const c=canon(name);if(table[c]!=null)return c;if(table[name]!=null)return name;
+  let best=null;for(const k of Object.keys(table)){if(c.includes(k)&&(!best||k.length>best.length))best=k;}return best;};
+const emojiOf=it=>EMO[findKey(it.name,EMO)]||(it.cat==="food"?"🥗":"📦");
+const isPaper=it=>/화장지|휴지|두루마리|papel/i.test(it.name);
+const unitOf=it=>it.unit||"개";
+function dpuOf(it){const p=Math.max(1,state.settings.people);return it.personDays?it.personDays/p:(it.dpu||30);}
+function homeNow(it){return Math.max(0,it.qty-diff(it.bought,today())/dpuOf(it));}
+function homeBuyBy(it){const reserve=isPaper(it)?state.settings.bathrooms:0;return addDays(it.bought,Math.max(0,it.qty-reserve)*dpuOf(it));}
+function homeEmpty(it){return addDays(it.bought,it.qty*dpuOf(it));}
+function foodSpoil(it){return addDays(it.bought,it.shelf||7);}
+const isLow=it=>it.cat==="food"&&it.qty>0&&it.qty<=1&&(it.start||0)>=3;
+
+function alertsList(){
+  const t=today(), w=state.settings.warnDays, out=[];
+  for(const it of state.items){
+    if(it.cat==="food"){
+      if(it.qty<=0) continue;
+      const left=diff(t,foodSpoil(it));
+      if(left<0) out.push({lv:2,it,t:`${it.name} — 상했을 수 있어요`,d:`${md(it.bought)}에 산 거예요. 확인해 보세요 (남은 ${r1(it.qty)}${unitOf(it)})`});
+      else if(left<=Math.min(2,w)) out.push({lv:1,it,t:`${it.name} — ${left===0?"오늘까지":left+"일 안에"} 드세요`,d:`남은 ${r1(it.qty)}${unitOf(it)} · ${md(foodSpoil(it))}쯤까지 신선해요`});
+      else if(isLow(it)) out.push({lv:1,it,t:`${it.name} — 거의 다 먹었어요`,d:`남은 ${r1(it.qty)}${unitOf(it)} · 장보기 목록에 넣었어요`});
+    }else{
+      const by=homeBuyBy(it), left=diff(t,by);
+      if(left<=0) out.push({lv:2,it,t:`${it.name} — 지금 사야 해요!`,d:`예상 남은 양 약 ${r1(homeNow(it))}${unitOf(it)} · ${md(homeEmpty(it))}쯤 다 떨어져요`});
+      else if(left<=w) out.push({lv:1,it,t:`${it.name} — ${left}일 후 다시 사세요`,d:`${md(by)}까지 사 두면 좋아요 · 예상 남은 양 약 ${r1(homeNow(it))}${unitOf(it)}`});
+    }
+  }
+  return out.sort((a,b)=>b.lv-a.lv);
+}
+// 핸드폰 알림용 목록 (앱이 꺼져 있어도 날짜가 되면 알림)
+function schedule(){
+  const w=state.settings.warnDays, out=[];
+  for(const it of state.items){
+    if(it.cat==="food"){
+      if(it.qty<=0) continue;
+      const sp=foodSpoil(it);
+      out.push({n:it.name,k:"spoil",d:sp,on:addDays(sp,-Math.min(2,w))});
+      if(isLow(it)) out.push({n:it.name,k:"low",d:today(),on:today()});
+    }else{
+      const by=homeBuyBy(it);
+      out.push({n:it.name,k:"buy",d:by,on:addDays(by,-w)});
+    }
+  }
+  return out;
+}
+// 장보기 자동 목록
+function autoShop(){
+  const w=state.settings.warnDays, t=today(), out=[];
+  for(const it of state.items){
+    if(it.cat==="home"){ if(diff(t,homeBuyBy(it))<=w) out.push({key:"a:"+it.id,name:it.name,why:"곧 떨어져요"}); }
+    else if(it.qty<=0) out.push({key:"a:"+it.id,name:it.name,why:"다 먹었어요"});
+    else if(isLow(it)) out.push({key:"a:"+it.id,name:it.name,why:`${r1(it.qty)}${unitOf(it)} 남음`});
+  }
+  return out;
+}
+
+// ================= 화면 =================
+function render(){
+  const s=state.settings;
+  sPeople.textContent=s.people; sBath.textContent=s.bathrooms; sWarn.textContent=s.warnDays; sHour.textContent=s.notifyHour;
+  document.getElementById("sub").textContent=`가족 ${s.people}명 · 화장실 ${s.bathrooms}개 · 오늘 ${md(today())}`;
+
+  const al=alertsList();
+  badge.style.display=al.length?"block":"none"; badge.textContent=al.length;
+  document.getElementById("alerts").innerHTML = al.length? al.map(a=>`
+    <div class="alert ${a.lv===2?"a-red":"a-orange"}"><div class="em">${emojiOf(a.it)}</div>
+    <div class="grow"><b>${esc(a.t)}</b><span class="muted">${esc(a.d)}</span></div>
+    ${a.it.cat==="home"?`<button class="btn-ghost btn-sm" data-rebuy="${a.it.id}">샀어요</button>`:""}</div>`).join("")
+    : (state.items.length? `<div class="alert a-ok"><div class="em">😊</div><div><b>지금은 걱정 없어요</b><span class="muted">떨어지기 ${s.warnDays}일 전, 매일 ${s.notifyHour}시에 핸드폰으로 알려드려요.</span></div></div>`
+      : `<div class="empty">아직 등록된 물건이 없어요.<br>위에 산 물건을 말로 하고 <b>🛒 샀어요</b>를 눌러 보세요.</div>`);
+
+  const foods=state.items.filter(i=>i.cat==="food"&&i.qty>0), homes=state.items.filter(i=>i.cat==="home");
+  stats.innerHTML=`<div><b>${foods.length}</b><span>식재료</span></div><div><b>${homes.length}</b><span>생활용품</span></div>
+    <div><b style="color:${al.length?"var(--red)":"var(--green)"}">${al.length}</b><span>알림</span></div>`;
+
+  // 식재료: 보관 장소별
+  const LOCS=[["fridge","🧊 냉장"],["freezer","❄️ 냉동"],["room","🧺 실온"]];
+  const fl=state.items.filter(i=>i.cat==="food");
+  let fh="";
+  for(const [k,label] of LOCS){
+    const list=fl.filter(i=>(i.loc||"fridge")===k).sort((a,b)=>(b.qty>0)-(a.qty>0)||foodSpoil(a).localeCompare(foodSpoil(b)));
+    if(!list.length) continue;
+    fh+=`<div class="loc">${label}</div>`+list.map(it=>{
+      const left=diff(today(),foodSpoil(it));
+      const pill = it.qty<=0?`<span class="pill p-red">다 먹음</span>`: left<0?`<span class="pill p-red">상했을 수도</span>`: left<=2?`<span class="pill p-orange">${left===0?"오늘까지":left+"일 남음"}</span>`:`<span class="pill p-green">${left}일 신선</span>`;
+      const pct=Math.min(100,Math.round(100*it.qty/Math.max(it.start||it.qty,0.01)));
+      return `<div class="item" data-edit="${it.id}"><div class="em">${emojiOf(it)}</div>
+        <div class="grow"><div class="nm">${esc(it.name)}${pill}</div><div class="meta">${md(it.bought)} 구입 · 처음 ${r1(it.start||it.qty)}${esc(unitOf(it))}</div>
+        <div class="bar"><i style="width:${pct}%;background:${pct<30?"var(--orange)":"var(--green)"}"></i></div></div>
+        <div class="qty">${r1(it.qty)}<small>${esc(unitOf(it))}</small></div></div>`;}).join("");
+  }
+  foodList.innerHTML = fh || `<div class="empty">냉장고가 비어 있어요 🥲</div>`;
+
+  const hl=homes.slice().sort((a,b)=>homeBuyBy(a).localeCompare(homeBuyBy(b)));
+  homeList.innerHTML = hl.length? hl.map(it=>{
+    const by=homeBuyBy(it), left=diff(today(),by), now=homeNow(it), per=dpuOf(it);
+    const pill= left<=0?`<span class="pill p-red">지금 사기</span>`: left<=s.warnDays?`<span class="pill p-orange">${left}일 후 사기</span>`:`<span class="pill p-green">${left}일 여유</span>`;
+    const pct=Math.min(100,Math.round(100*now/Math.max(it.start||it.qty,0.01)));
+    return `<div class="item" data-edit="${it.id}"><div class="em">${emojiOf(it)}</div>
+      <div class="grow"><div class="nm">${esc(it.name)}${pill}</div>
+      <div class="meta">1${esc(unitOf(it))}에 약 ${per<1?r1(per*24)+"시간":r1(per)+"일"} · ${md(by)}까지 사기</div>
+      <div class="bar"><i style="width:${pct}%;background:${left<=s.warnDays?"var(--orange)":"var(--green)"}"></i></div></div>
+      <div class="qty">${r1(now)}<small>${esc(unitOf(it))}</small></div></div>`;}).join("")
+    : `<div class="empty">화장지, 치약, 샴푸 같은 걸 등록해 보세요.</div>`;
+
+  // 장보기
+  const auto=autoShop(), man=state.shop;
+  const sc=state.shopChecked||{};
+  const allShop=[...auto.map(a=>({...a,auto:true,done:!!sc[a.key]})),...man.map(m=>({key:"m:"+m.id,name:m.name,why:"직접 넣음",done:!!m.done}))];
+  const notDone=allShop.filter(x=>!x.done).length;
+  badge2.style.display=notDone?"block":"none"; badge2.textContent=notDone;
+  shopList.innerHTML = allShop.length? allShop.map(x=>`<label class="shop ${x.done?"done":""}"><input type="checkbox" data-shop="${x.key}" ${x.done?"checked":""}>
+    <span style="font-size:22px">${EMO[findKey(x.name,EMO)]||"🛒"}</span><div class="grow"><div class="nm">${esc(x.name)}</div><div class="muted">${esc(x.why)}</div></div></label>`).join("")
+    : `<div class="empty">살 게 없어요 👍</div>`;
+
+  log.innerHTML = state.log.length? state.log.slice(0,8).map(l=>`<div class="logline"><b>${l.type==="buy"?"🛒":l.type==="ate"?"🍳":"✏️"} ${md(l.date)}</b> ${esc(l.text)}</div>`).join("")
+    : `<div class="empty">기록이 여기 쌓여요.</div>`;
+}
+const addLog=(type,text)=>{state.log.unshift({date:today(),type,text});state.log=state.log.slice(0,60);};
+
+// ================= 탭 =================
+function showTab(id){
+  document.querySelectorAll("nav button").forEach(x=>x.classList.toggle("on",x.dataset.tab===id));
+  document.querySelectorAll(".view").forEach(v=>v.classList.toggle("on",v.id===id));
+  window.scrollTo(0,0);
+}
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+
+// ================= 토스트/모달 =================
+let tt;function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("on");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("on"),2600);}
+const mbg=document.getElementById("mbg"),modal=document.getElementById("modal");
+function openModal(html){modal.innerHTML=html;mbg.classList.add("on");modal.scrollTop=0;}
+function closeModal(){mbg.classList.remove("on");}
+mbg.onclick=e=>{if(e.target===mbg)closeModal();};
+// 핸드폰 뒤로가기
+window.onBack=()=>{ if(mbg.classList.contains("on")){closeModal();return true;} if(!document.getElementById("v-home").classList.contains("on")){showTab("v-home");return true;} return false; };
+window.onResumeApp=()=>render();
+
+// ================= 산 물건 읽기 =================
+const NUMW={"한":1,"하나":1,"두":2,"둘":2,"세":3,"셋":3,"네":4,"넷":4,"다섯":5,"여섯":6,"일곱":7,"여덟":8,"아홉":9,"열":10,"반":0.5};
+function parseBuy(text){
+  const out=[];
+  const t=text.replace(/(이번\s*주에?|오늘|어제|그리고|샀어요?|샀다|샀음|구입했어요?|구입|사왔어요?|사 왔어요?)/g," ");
+  const re=/([가-힣A-Za-zÀ-ÿ]+(?:\s?[가-힣]+)?)\s*(\d+(?:\.\d+)?|한|하나|두|둘|세|셋|네|넷|다섯|여섯|일곱|여덟|아홉|열|반)\s*(개|롤|통|팩|봉지|봉|병|묶음|kg|키로|단|송이|모|판|포대|줄|알|마리|덩이|박스)?/g;
+  let m;
+  while((m=re.exec(t))){
+    let name=m[1].trim().split(/\s+/).pop(); // 마지막 단어
+    // "오이를", "사과랑" 처럼 붙은 말 떼기 — 떼고 나서 아는 이름일 때만 (오이·망가·사과는 그대로)
+    const known=n=>{const c=canon(n);return SHELF[c]!=null||HOME[c]!=null||EMO[c]!=null;};
+    const stripped=name.replace(/(을|를|이랑|랑|하고|이|가|은|는|도|와|과)$/,"");
+    if(stripped!==name && stripped && !known(name) && known(stripped)) name=stripped;
+    if(!name||name.length<1) continue;
+    const q=/^\d/.test(m[2])?+m[2]:NUMW[m[2]];
+    if(!q) continue;
+    let unit=m[3]||"";
+    if(unit==="판"&&/계란|달걀/.test(name)) {out.push(makeNew(name,q*30,"개"));continue;}
+    out.push(makeNew(name,q,unit));
+  }
+  return out;
+}
+function makeNew(name,qty,unit){
+  const hk=findKey(name,HOME);
+  if(hk) return {name,qty,unit:unit||HOME[hk].unit,cat:"home",personDays:HOME[hk].personDays,dpu:HOME[hk].dpu};
+  const sk=findKey(name,SHELF), c=canon(name);
+  return {name,qty,unit:unit||"개",cat:"food",shelf:sk?SHELF[sk]:7,loc:ROOM.includes(c)?"room":"fridge"};
+}
+
+function onBuy(){
+  const text=say.value.trim(); if(!text){toast("산 물건을 먼저 말하거나 적어 주세요");return;}
+  const items=parseBuy(text);
+  if(!items.length){toast("물건 이름과 개수를 같이 말해 주세요. 예) 오이 5개");return;}
+  showBuyPreview(items);
+}
+function showBuyPreview(items){
+  openModal(`<h3>🛒 이렇게 넣을까요?</h3><p class="muted">개수나 종류가 다르면 고쳐 주세요.</p>
+  ${items.map((it,i)=>`<div class="prow" style="flex-wrap:wrap"><input type="checkbox" checked data-i="${i}">
+    <span style="font-size:24px">${EMO[findKey(it.name,EMO)]||(it.cat==="food"?"🥗":"📦")}</span>
+    <div class="grow"><b>${esc(it.name)}</b></div>
+    <input type="number" step="0.5" min="0" value="${it.qty}" data-q="${i}"><span>${esc(it.unit||"개")}</span>
+    <select data-c="${i}" style="width:100%;margin-top:4px">
+      <option value="fridge" ${it.cat==="food"&&it.loc==="fridge"?"selected":""}>🧊 식재료 · 냉장</option>
+      <option value="freezer">❄️ 식재료 · 냉동</option>
+      <option value="room" ${it.cat==="food"&&it.loc==="room"?"selected":""}>🧺 식재료 · 실온</option>
+      <option value="home" ${it.cat==="home"?"selected":""}>🧻 생활용품</option>
+    </select></div>`).join("")}
+  <div class="two"><button class="btn-ghost" id="mCancel">취소</button><button class="btn-green" id="mOk">넣기</button></div>`);
+  mCancel.onclick=closeModal;
+  mOk.onclick=()=>{
+    const t=today(), names=[];
+    items.forEach((it,i)=>{
+      if(!modal.querySelector(`[data-i="${i}"]`).checked) return;
+      const q=+modal.querySelector(`[data-q="${i}"]`).value||0; if(q<=0) return;
+      const sel=modal.querySelector(`[data-c="${i}"]`).value;
+      const cat=sel==="home"?"home":"food";
+      if(cat!==it.cat) Object.assign(it, cat==="home"?{personDays:30}:{shelf:7});
+      const loc=cat==="food"?sel:undefined;
+      const ex=state.items.find(x=>x.cat===cat&&canon(x.name)===canon(it.name)&&(cat==="home"||(x.loc||"fridge")===loc));
+      if(ex){
+        if(cat==="food"){ex.qty=r1(Math.max(0,ex.qty)+q);ex.start=ex.qty;ex.bought=t;}
+        else{ex.qty=r1(homeNow(ex)+q);ex.start=ex.qty;ex.bought=t;}
+        delete state.shopChecked["a:"+ex.id];
+      }else{
+        const n={id:uid(),name:it.name,cat,qty:q,start:q,unit:it.unit||"개",bought:t};
+        if(cat==="food"){n.loc=loc;n.shelf=loc==="freezer"?Math.max(60,it.shelf||7):Math.max(1,Math.round(+it.shelf||7));}
+        else{ if(+it.personDays>0) n.personDays=+it.personDays; else n.dpu=+it.dpu>0?+it.dpu:30; }
+        state.items.push(n);
+      }
+      // 직접 넣은 장보기 항목 중 같은 이름은 체크
+      state.shop.forEach(s=>{if(canon(s.name)===canon(it.name))s.done=true;});
+      names.push(`${it.name} ${q}${it.unit||"개"}`);
+    });
+    if(names.length) addLog("buy",names.join(", "));
+    save();render();closeModal();say.value="";toast("넣었어요! 👍");
+  };
+}
+
+// ================= 해먹은 음식 계산 =================
+function estimateUse(text, foods){
+  const people=state.settings.people, scale=people/4;
+  const need={}; // 기준 이름 → 개수
+  const why={}; const found=[];
+  let t=text.toLowerCase();
+  // 비슷한 이름 바꾸기
+  for(const [a,b] of Object.entries(DISH_ALIAS).sort((x,y)=>y[0].length-x[0].length)) t=t.split(a.toLowerCase()).join(" "+b+" ");
+  // 긴 이름부터 찾기 (감자샐러드가 샐러드보다 먼저)
+  const dishes=Object.keys(RECIPES).sort((a,b)=>b.length-a.length);
+  for(const d of dishes){
+    let idx=t.indexOf(d);
+    while(idx>=0){
+      const after=t.slice(idx+d.length,idx+d.length+8);
+      const mm=after.match(/(\d+|두|세|네|다섯)\s*번/);
+      const times=mm?(/^\d/.test(mm[1])?+mm[1]:NUMW[mm[1]]):1;
+      for(const [ing,q] of Object.entries(RECIPES[d])){ need[ing]=(need[ing]||0)+q*scale*times; why[ing]=(why[ing]?why[ing]+", ":"")+d; }
+      found.push(d);
+      t=t.slice(0,idx)+" ".repeat(d.length)+t.slice(idx+d.length);
+      idx=t.indexOf(d);
+    }
+  }
+  // 재료를 그냥 먹은 경우: "사과 2개 먹었어"
+  for(const f of foods){
+    const names=[...new Set([f.name,canon(f.name)])];
+    for(const n of names){
+      const re=new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"\\s*(\\d+(?:\\.\\d+)?|한|하나|두|둘|세|셋|네|넷|다섯|반)\\s*(개|쪽|알|조각)?","g");
+      let m; while((m=re.exec(t))){const q=/^\d/.test(m[1])?+m[1]:NUMW[m[1]];const c=canon(f.name);need[c]=(need[c]||0)+q;why[c]=(why[c]?why[c]+", ":"")+"그냥 먹음";found.push(n);}
+    }
+  }
+  const used=[];
+  for(const f of foods){
+    const c=canon(f.name); let k=null;
+    if(need[c]!=null) k=c; else { for(const ing of Object.keys(need)){ if(c.includes(ing)||ing.includes(c)){k=ing;break;} } }
+    if(k&&need[k]>0){ const q=Math.min(f.qty,Math.round(need[k]*2)/2||0.5); used.push({it:f,qty:q,why:why[k]}); need[k]=0; }
+  }
+  return {used,found};
+}
+function onAte(){
+  const text=say.value.trim(); if(!text){toast("해먹은 음식을 먼저 말하거나 적어 주세요");return;}
+  const foods=state.items.filter(i=>i.cat==="food"&&i.qty>0);
+  if(!foods.length){toast("등록된 식재료가 없어요. 먼저 '샀어요'로 넣어 주세요");return;}
+  const {used,found}=estimateUse(text,foods);
+  const comment = found.length? `${[...new Set(found)].join(", ")} — 가족 ${state.settings.people}명 기준 평균치예요.` : "이 음식은 아직 몰라서, 쓴 재료를 직접 넣어 주세요.";
+  showUsePreview(used,text,comment);
+}
+function showUsePreview(used,text,comment){
+  const foods=state.items.filter(i=>i.cat==="food"&&i.qty>0);
+  const rows=foods.map(f=>{const u=used.find(x=>x.it.id===f.id);return {it:f,qty:u?u.qty:0,why:u?u.why:""};}).sort((a,b)=>b.qty-a.qty);
+  openModal(`<h3>🍳 이만큼 쓴 것 같아요</h3><p class="muted">${esc(comment)} 다르면 숫자를 고쳐 주세요.</p>
+  ${rows.map((r,i)=>`<div class="prow" style="${r.qty?"":"opacity:.6"}"><span style="font-size:24px">${emojiOf(r.it)}</span>
+    <div class="grow"><b>${esc(r.it.name)}</b><div class="muted">남은 ${r1(r.it.qty)}${esc(unitOf(r.it))}${r.why?" · "+esc(r.why):""}</div></div>
+    <span>−</span><input type="number" step="0.5" min="0" max="${r.it.qty}" value="${r1(r.qty)}" data-u="${i}"><span>${esc(unitOf(r.it))}</span></div>`).join("")}
+  <div class="two"><button class="btn-ghost" id="mCancel">취소</button><button class="btn-orange" id="mOk">빼기</button></div>`);
+  mCancel.onclick=closeModal;
+  mOk.onclick=()=>{
+    const parts=[];
+    rows.forEach((r,i)=>{const q=Math.min(r.it.qty,Math.max(0,+modal.querySelector(`[data-u="${i}"]`).value||0));if(q>0){r.it.qty=r1(r.it.qty-q);parts.push(`${r.it.name} −${r1(q)}`);}});
+    addLog("ate",text+(parts.length?` (${parts.join(", ")})`:""));
+    save();render();closeModal();say.value="";toast("재고에서 뺐어요 🍽️");
+  };
+}
+
+// ================= 직접 추가/수정 =================
+function editItem(it,cat){
+  const isNew=!it; it=it||{id:uid(),cat,name:"",qty:1,unit:cat==="home"?"롤":"개",bought:today(),shelf:7,loc:"fridge",personDays:cat==="home"?30:undefined};
+  const usage=it.cat==="home"?(it.personDays?"p":"h"):"";
+  openModal(`<h3>${isNew?"＋ 새로 추가":emojiOf(it)+" "+esc(it.name)}</h3>
+    <label class="f">이름</label><input class="full" id="eName" value="${esc(it.name)}" placeholder="${it.cat==="food"?"예) 오이":"예) 화장지"}">
+    <div class="row"><div class="grow"><label class="f">${isNew?"개수":"지금 남은 개수"}</label><input class="full" type="number" step="0.5" min="0" id="eQty" value="${r1(it.cat==="home"&&!isNew?homeNow(it):it.qty)}"></div>
+    <div style="width:96px"><label class="f">단위</label><input class="full" id="eUnit" value="${esc(unitOf(it))}"></div></div>
+    ${it.cat==="food"?`<label class="f">보관 장소</label>
+      <div class="seg" id="eLoc">${[["fridge","🧊 냉장"],["freezer","❄️ 냉동"],["room","🧺 실온"]].map(([k,l])=>`<button data-loc="${k}" class="${(it.loc||"fridge")===k?"on":""}">${l}</button>`).join("")}</div>
+      <div class="row"><div class="grow"><label class="f">산 날</label><input class="full" type="date" id="eDate" value="${it.bought}"></div>
+      <div style="width:120px"><label class="f">신선 기간(일)</label><input class="full" type="number" min="1" id="eShelf" value="${it.shelf||7}"></div></div>`
+    :`<label class="f">얼마나 쓰나요?</label>
+      <div class="row"><select id="eMode" class="grow"><option value="p" ${usage==="p"?"selected":""}>한 사람이 1${esc(unitOf(it))}를</option><option value="h" ${usage==="h"?"selected":""}>우리 집 전체가 1${esc(unitOf(it))}를</option></select>
+      <input type="number" step="0.5" min="0.1" id="eDays" style="width:80px" value="${r1(it.personDays||it.dpu||30)}"><span>일</span></div>
+      <p class="muted">예) 화장지: 한 사람이 1롤을 3.5일 · 세탁세제: 집 전체가 1통을 30일</p>`}
+    <div class="two"><button class="btn-ghost" id="mCancel">취소</button><button class="btn-green" id="mOk">저장</button></div>
+    ${isNew?"":`<button class="btn-red full" id="mDel" style="margin-top:10px">삭제</button>`}`);
+  let loc=it.loc||"fridge";
+  const seg=document.getElementById("eLoc");
+  if(seg) seg.onclick=e=>{const b=e.target.closest("[data-loc]");if(!b)return;loc=b.dataset.loc;
+    seg.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+    const sh=document.getElementById("eShelf"); if(loc==="freezer"&&+sh.value<60) sh.value=60;
+    if(loc!=="freezer"&&+sh.value>=60){const k=findKey(eName.value,SHELF);sh.value=k?SHELF[k]:7;}};
+  // 이름을 쓰면 기본값 채우기
+  eName.oninput=()=>{ if(!isNew) return;
+    if(it.cat==="food"){const k=findKey(eName.value,SHELF);if(k)eShelf.value=SHELF[k];}
+    else{const k=findKey(eName.value,HOME);if(k){eUnit.value=HOME[k].unit;eMode.value=HOME[k].personDays?"p":"h";eDays.value=HOME[k].personDays||HOME[k].dpu;}}};
+  mCancel.onclick=closeModal;
+  mOk.onclick=()=>{
+    const name=eName.value.trim(); if(!name){toast("이름을 적어 주세요");return;}
+    const q=Math.max(0,+eQty.value||0);
+    it.name=name; it.unit=eUnit.value.trim()||"개";
+    if(it.cat==="food"){it.loc=loc;it.bought=eDate.value||today();it.shelf=Math.max(1,+eShelf.value||7);
+      if(isNew||q>it.qty) it.start=q; it.qty=q;}
+    else{const days=Math.max(0.1,+eDays.value||30);
+      if(eMode.value==="p"){it.personDays=days;delete it.dpu;}else{it.dpu=days;delete it.personDays;}
+      it.qty=q;it.bought=today();if(isNew||q>(it.start||0))it.start=q;}
+    if(isNew) state.items.push(it);
+    addLog("edit",`${name} ${isNew?"추가":"수정"} (${r1(q)}${it.unit})`);
+    save();render();closeModal();toast("저장했어요");
+  };
+  const del=document.getElementById("mDel");
+  if(del) del.onclick=()=>{
+    if(del.dataset.sure){state.items=state.items.filter(x=>x.id!==it.id);delete state.shopChecked["a:"+it.id];save();render();closeModal();toast("삭제했어요");}
+    else{del.dataset.sure="1";del.textContent="한 번 더 누르면 삭제돼요";}
+  };
+}
+function rebuy(it){
+  openModal(`<h3>${emojiOf(it)} ${esc(it.name)} 샀어요</h3><p class="muted">몇 ${esc(unitOf(it))} 샀어요? (지금 남은 양 약 ${r1(homeNow(it))}${esc(unitOf(it))})</p>
+  <input class="full" type="number" min="0" step="1" id="rQty" value="${Math.max(1,Math.round(it.start||4))}">
+  <div class="two"><button class="btn-ghost" id="mCancel">취소</button><button class="btn-green" id="mOk">넣기</button></div>`);
+  mCancel.onclick=closeModal;
+  mOk.onclick=()=>{const q=+rQty.value||0;if(q<=0)return;
+    it.qty=r1(homeNow(it)+q);it.start=it.qty;it.bought=today();delete state.shopChecked["a:"+it.id];
+    addLog("buy",`${it.name} ${q}${unitOf(it)}`);save();render();closeModal();toast("넣었어요! 👍");};
+}
+
+// ================= 버튼들 =================
+document.addEventListener("click",e=>{
+  const ed=e.target.closest("[data-edit]"); if(ed){editItem(state.items.find(x=>x.id===ed.dataset.edit));return;}
+  const ad=e.target.closest("[data-add]"); if(ad){editItem(null,ad.dataset.add);return;}
+  const rb=e.target.closest("[data-rebuy]"); if(rb){rebuy(state.items.find(x=>x.id===rb.dataset.rebuy));return;}
+  const st=e.target.closest("[data-step]"); if(st){const [k,d]=st.dataset.step.split(":");
+    const lim={people:[1,20],bathrooms:[0,10],warnDays:[1,14],notifyHour:[5,22]}[k];
+    state.settings[k]=Math.min(lim[1],Math.max(lim[0],(state.settings[k]||0)+(+d)));save();render();}
+});
+document.addEventListener("change",e=>{
+  const cb=e.target.closest("[data-shop]"); if(!cb) return;
+  const key=cb.dataset.shop;
+  if(key.startsWith("a:")){ if(cb.checked) state.shopChecked[key]=today(); else delete state.shopChecked[key]; }
+  else { const m=state.shop.find(x=>"m:"+x.id===key); if(m) m.done=cb.checked; }
+  save();render();
+});
+bBuy.onclick=onBuy; bAte.onclick=onAte;
+shopAdd.onclick=()=>{const v=shopNew.value.trim();if(!v)return;
+  v.split(/[,，]/).map(s=>s.trim()).filter(Boolean).forEach(n=>state.shop.push({id:uid(),name:n,done:false}));
+  shopNew.value="";save();render();};
+shopNew.onkeydown=e=>{if(e.key==="Enter")shopAdd.click();};
+shopClear.onclick=()=>{state.shop=state.shop.filter(x=>!x.done);save();render();toast("정리했어요");};
+shopSend.onclick=()=>{
+  const sc=state.shopChecked||{};
+  const names=[...autoShop().filter(a=>!sc[a.key]).map(a=>a.name),...state.shop.filter(x=>!x.done).map(x=>x.name)];
+  if(!names.length){toast("보낼 게 없어요");return;}
+  const text="🛍️ 장보기 목록 ("+md(today())+")\n"+names.map(n=>"☐ "+n).join("\n");
+  if(APP) Android.share(text); else {try{navigator.clipboard.writeText(text);toast("복사했어요");}catch(e){}}
+};
+bTest.onclick=()=>{ if(APP) Android.testNotify(); else toast("핸드폰 앱에서만 돼요"); };
+bReset.onclick=function(){
+  if(!this.dataset.sure){this.dataset.sure="1";this.textContent="정말 다 지울까요? 한 번 더 누르세요";return;}
+  state=fresh();save();render();this.dataset.sure="";this.textContent="전체 지우고 새로 시작";toast("새로 시작해요");
+};
+// 말로 입력
+mic.onclick=()=>{ if(APP) Android.startVoice(); else toast("핸드폰 앱에서 쓸 수 있어요. 키보드의 🎤도 돼요"); };
+window.onVoice=text=>{ say.value=(say.value.trim()?say.value.trim()+" ":"")+text; toast("들었어요: "+text); };
+
+render();
+save(); // 처음 열 때도 알림 목록 맞추기
+</script>
+</body>
+</html>

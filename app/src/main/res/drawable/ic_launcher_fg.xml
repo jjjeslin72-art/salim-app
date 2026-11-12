@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 집 안에 종(알림) 모양 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- 지붕 -->
+    <path android:fillColor="#FFF4E0" android:pathData="M54,28 L80,50 L74,50 L74,78 L34,78 L34,50 L28,50 Z" />
+    <!-- 종 -->
+    <path android:fillColor="#E07A2F" android:pathData="M54,46 C61,46 65,51 65,58 L65,66 L69,70 L39,70 L43,66 L43,58 C43,51 47,46 54,46 Z" />
+    <path android:fillColor="#E07A2F" android:pathData="M49,72 L59,72 C59,75 57,77 54,77 C51,77 49,75 49,72 Z" />
+    <!-- 잎사귀 -->
+    <path android:fillColor="#9BD3A8" android:pathData="M70,30 C78,28 82,32 82,38 C75,40 70,37 70,30 Z" />
+</vector>
