@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>살림 알리미</title>
+<title>집 도우미</title>
 <style>
   :root{
     --bg:#fbf6ee; --card:#ffffff; --ink:#2b2420; --sub:#7a6e64; --line:#eadfce;
@@ -102,7 +102,7 @@
 <body>
 <header>
   <div class="grow">
-    <h1>🏠 <span data-pt="Avisos da Casa">살림 알리미</span></h1>
+    <h1>🏠 <span data-pt="Ajudante da Casa">집 도우미</span></h1>
     <p id="sub"></p>
   </div>
   <span class="fam" id="famBadge" style="display:none"></span>
@@ -204,6 +204,7 @@
       <div class="stepper"><button data-local="notifyHour:-1">−</button><b id="sHour"></b><span data-pt="h">시</span><button data-local="notifyHour:1">＋</button></div>
       <label class="f" data-pt="Avisar quantos dias antes">다 떨어지기 며칠 전에 알려줄까요</label>
       <div class="stepper"><button data-step="warnDays:-1">−</button><b id="sWarn"></b><span data-pt="dias antes">일 전</span><button data-step="warnDays:1">＋</button></div>
+      <div id="alarmBox"></div>
       <button class="btn-blue full" id="bTest" style="margin-top:14px" data-pt="🔔 Testar aviso agora">🔔 알림 지금 시험해 보기</button>
     </div>
     <div class="card">
@@ -275,7 +276,8 @@ window.dispatchEvent(new Event("fb-ready"));
 <script>
 // ================= 언어 =================
 const LOCAL_KEY="salim_local";
-let local={lang:"ko",familyCode:"",deviceId:"",notifyHour:9,lastAt:0};
+let local={lang:"ko",familyCode:"",deviceId:"",notifyHour:9,lastAt:0,
+  sound:"sound",volume:80,quietOn:true,quietStart:22,quietEnd:7,dnd:"respect",soundTitle:""};
 try{Object.assign(local,JSON.parse(localStorage.getItem(LOCAL_KEY)||"{}"));}catch(e){}
 if(!local.deviceId) local.deviceId=Math.random().toString(36).slice(2,12);
 const saveLocal=()=>{try{localStorage.setItem(LOCAL_KEY,JSON.stringify(local));}catch(e){}};
@@ -290,7 +292,8 @@ function applyLang(){
 
 // ================= 기본 데이터 =================
 // 같은 재료를 다르게 부르는 이름(한국어·포르투갈어) → 기준 이름
-const ALIAS = {"망가":"망고","manga":"망고","마멍":"파파야","마몽":"파파야","mamão":"파파야","mamao":"파파야","애호박":"호박","단호박":"호박","달걀":"계란","파":"대파","쪽파":"대파",
+const ALIAS = {"휴지":"화장지","두루마리":"화장지","두루마리휴지":"화장지","화장실휴지":"화장지","빨래세제":"세탁세제","세제":"세탁세제","퐁퐁":"주방세제","설거지세제":"주방세제",
+  "키친타월":"키친타올","치솔":"칫솔","망가":"망고","manga":"망고","마멍":"파파야","마몽":"파파야","mamão":"파파야","mamao":"파파야","애호박":"호박","단호박":"호박","달걀":"계란","파":"대파","쪽파":"대파",
   "pepino":"오이","pepinos":"오이","maçã":"사과","maçãs":"사과","maca":"사과","cenoura":"당근","cenouras":"당근","abobrinha":"호박","abobrinhas":"호박","abóbora":"호박",
   "batata":"감자","batatas":"감자","cebola":"양파","cebolas":"양파","tomate":"토마토","tomates":"토마토","banana":"바나나","bananas":"바나나","ovo":"계란","ovos":"계란",
   "leite":"우유","alface":"상추","alho":"마늘","limão":"레몬","limao":"레몬","laranja":"오렌지","laranjas":"오렌지","uva":"포도","uvas":"포도","morango":"딸기","morangos":"딸기",
@@ -502,6 +505,7 @@ function render(){
   $("log").innerHTML = state.log.length? state.log.slice(0,8).map(l=>`<div class="logline"><b>${l.type==="buy"?"🛒":l.type==="ate"?"🍳":"✏️"} ${md(l.date)}</b> ${esc(l.text)}</div>`).join("")
     : `<div class="empty">${L("기록이 여기 쌓여요.","Os registros aparecem aqui.")}</div>`;
   renderFamily();
+  renderAlarm();
 }
 const addLog=(type,text)=>{state.log.unshift({date:today(),type,text});state.log=state.log.slice(0,60);};
 
@@ -835,7 +839,7 @@ function renderFamily(){
     box.innerHTML=`<p class="muted" style="margin:0">${L("우리 가족 코드","Código da família")}</p><div class="code">${esc(local.familyCode)}</div>
     <p class="muted">${famStatus==="ok"?L("✅ 연결됨 — 바뀌면 가족 핸드폰에 바로 반영돼요","✅ Conectado — muda na hora nos outros celulares"):famStatus==="err"?`<span style="color:var(--red)">${esc(famErr)}</span>`:L("연결 중…","Conectando…")}</p>
     <div class="two"><button class="btn-green" id="famShare">📤 ${L("코드 보내기","Enviar código")}</button><button class="btn-ghost" id="famLeave">${L("연결 끊기","Sair")}</button></div>`;
-    $("famShare").onclick=()=>{const t=L(`🏠 살림 알리미 가족 코드: ${local.familyCode}\n앱 설정 → 가족과 같이 쓰기 → 코드 넣기`,`🏠 Código da família no app Avisos da Casa: ${local.familyCode}\nAjustes → Usar junto com a família → Entrar com código`);
+    $("famShare").onclick=()=>{const t=L(`🏠 집 도우미 가족 코드: ${local.familyCode}\n앱 설정 → 가족과 같이 쓰기 → 코드 넣기`,`🏠 Código da família no app Ajudante da Casa: ${local.familyCode}\nAjustes → Usar junto com a família → Entrar com código`);
       if(APP) Android.share(t); else {try{navigator.clipboard.writeText(t);toast("OK");}catch(e){}}};
     $("famLeave").onclick=function(){ if(!this.dataset.sure){this.dataset.sure="1";this.textContent=L("한 번 더 누르세요","Toque de novo");return;}
       if(famUnsub){try{famUnsub();}catch(e){}famUnsub=null;} local.familyCode="";saveLocal();famStatus="";render();toast(L("연결을 끊었어요. 내 핸드폰 데이터는 그대로예요","Desconectado. Seus dados continuam aqui")); };
@@ -889,6 +893,40 @@ async function startFamily(){
 }
 window.addEventListener("fb-ready",()=>{ if(local.familyCode) startFamily(); });
 
+// ================= 알람 소리 설정 =================
+function pushAlarm(){ if(APP) try{Android.setAlarmPrefs(JSON.stringify({sound:local.sound,volume:local.volume,quietOn:local.quietOn,quietStart:local.quietStart,quietEnd:local.quietEnd,dnd:local.dnd}));}catch(e){} }
+function renderAlarm(){
+  const b=$("alarmBox"); if(!b) return;
+  if(APP&&!local.soundTitle) try{local.soundTitle=Android.soundTitle();}catch(e){}
+  const seg=(key,opts)=>`<div class="seg">${opts.map(([v,l])=>`<button data-al="${key}:${v}" class="${String(local[key])===String(v)?"on":""}">${l}</button>`).join("")}</div>`;
+  b.innerHTML=`
+    <label class="f">${L("알림 방식","Tipo de aviso")}</label>
+    ${seg("sound",[["sound",L("🔔 소리+진동","🔔 Som+vibra")],["vibrate",L("📳 진동만","📳 Só vibra")],["silent",L("🔕 무음","🔕 Mudo")]])}
+    ${local.sound==="sound"?`
+    <label class="f">${L("알람음","Som do aviso")}</label>
+    <div class="row"><div class="grow" style="font-weight:700">🎵 ${esc(local.soundTitle||L("기본 알림음","Som padrão"))}</div>
+      <button class="btn-ghost btn-sm" id="aPick">${L("바꾸기","Trocar")}</button><button class="btn-ghost btn-sm" id="aPlay">▶</button></div>
+    <label class="f">${L("볼륨","Volume")} <b id="aVolTxt">${local.volume}%</b></label>
+    <input type="range" min="10" max="100" step="5" id="aVol" value="${local.volume}" class="full" style="accent-color:var(--green);border:0;padding:0">`:""}
+    <label class="f">${L("방해 금지 시간 (이 시간엔 조용히)","Horário silencioso")}</label>
+    ${seg("quietOn",[["true",L("켜기","Ligado")],["false",L("끄기","Desligado")]])}
+    ${local.quietOn?`<div class="row" style="margin-top:8px;justify-content:center">
+      <div class="stepper"><button data-q="quietStart:-1">−</button><b>${local.quietStart}</b><button data-q="quietStart:1">＋</button></div>
+      <span>~</span>
+      <div class="stepper"><button data-q="quietEnd:-1">−</button><b>${local.quietEnd}</b><button data-q="quietEnd:1">＋</button></div>
+      <span>${L("시","h")}</span></div>`:""}
+    <label class="f">${L("핸드폰이 '방해 금지 모드'일 때","Com o celular em 'Não perturbe'")}</label>
+    ${seg("dnd",[["respect",L("🤫 조용히","🤫 Silencioso")],["ignore",L("⏰ 그래도 울리기","⏰ Tocar mesmo assim")]])}`;
+  const v=$("aVol"); if(v){ v.oninput=()=>{$("aVolTxt").textContent=v.value+"%";}; v.onchange=()=>{local.volume=+v.value;saveLocal();pushAlarm();}; }
+  const pk=$("aPick"); if(pk) pk.onclick=()=>{ if(APP) Android.pickSound(); else toast(L("핸드폰 앱에서 돼요","Só no app")); };
+  const pl=$("aPlay"); if(pl) pl.onclick=()=>{ if(APP){pushAlarm();Android.previewSound();} };
+}
+window.onSoundPicked=title=>{local.soundTitle=title;saveLocal();renderAlarm();toast("🎵 "+title);};
+document.addEventListener("click",e=>{
+  const a=e.target.closest("[data-al]"); if(a){const [k,v]=a.dataset.al.split(":");local[k]=v==="true"?true:v==="false"?false:v;saveLocal();pushAlarm();renderAlarm();return;}
+  const q=e.target.closest("[data-q]"); if(q){const [k,d]=q.dataset.q.split(":");local[k]=((local[k]+(+d))%24+24)%24;saveLocal();pushAlarm();renderAlarm();}
+});
+
 // ================= 물어보기 =================
 function answerLocal(q){
   const t=q.toLowerCase();
@@ -897,8 +935,12 @@ function answerLocal(q){
     if(t.includes(it.name.toLowerCase())||t.includes(c)) return true;
     return Object.entries(ALIAS).some(([k,v])=>v===c&&t.includes(k));
   });
+  const yn=/있(니|어|나|냐|어요|습니까|을까)|\btem\b/.test(t);
   if(hits.length){
     return hits.map(it=>{
+      const have=(it.cat==="home"?homeNow(it):it.qty)>0;
+      const pre=yn?(have?L("네, ","Sim, "):L("아니요, ","Não, ")):"";
+      return pre+(()=>{
       const q2=`${r1(it.cat==="home"?homeNow(it):it.qty)}${unitOf(it)}`;
       if(it.cat==="food"){
         if(it.qty<=0) return L(`${it.name}는 다 먹었어요. 장보기 목록에 넣어 뒀어요.`,`${it.name}: acabou. Já está na lista de compras.`);
@@ -908,12 +950,13 @@ function answerLocal(q){
       }
       const by=homeBuyBy(it), left=diff(today(),by);
       return L(`${it.name} 약 ${q2} 남았어요. ${left<=0?"지금 사야 해요!":md(by)+"까지 사면 돼요 ("+left+"일 남음)."}`,`${it.name}: restam ~${q2}. ${left<=0?"Compre agora!":"Compre até "+md(by)+" ("+left+" dias)."}`);
+      })();
     }).join("\n");
   }
   // 아는 물건 이름인데 등록이 안 된 경우
   const names=[...Object.keys(SHELF),...Object.keys(HOME),...Object.keys(ALIAS)].sort((a,b)=>b.length-a.length);
   const named=names.find(n=>n.length>=2&&t.includes(n.toLowerCase()));
-  if(named) return L(`${named}는 지금 등록된 게 없어요. 사셨으면 '샀어요'로 넣어 주세요.`,`Não tem ${named} cadastrado. Se comprou, use 'Comprei'.`);
+  if(named) return (yn?L("아니요, ","Não, "):"")+L(`${named}는 지금 등록된 게 없어요. 사셨으면 '샀어요'로 넣어 주세요.`,`Não tem ${named} cadastrado. Se comprou, use 'Comprei'.`);
   return null;
 }
 async function onAsk(){
@@ -929,7 +972,7 @@ async function onAsk(){
         생활용품:state.items.filter(i=>i.cat==="home").map(i=>({이름:i.name,남은약:r1(homeNow(i)),단위:i.unit,사야할날:homeBuyBy(i)})),
         장보기목록:autoShop().map(a=>a.name).concat(state.shop.filter(x=>!x.done).map(x=>x.name)),
         이번달지출:state.purchases.filter(p=>p.date.slice(0,7)===mo&&+p.price>0).map(p=>({이름:p.name,금액:p.price,날:p.date}))};
-      const j=await withTimeout(FB_AI(`너는 우리 집 살림 도우미야. 아래 우리 집 데이터만 보고 질문에 ${langName()}로 짧고 친절하게 (1~3문장) 대답해. 데이터에 없으면 없다고 말해. 망가=망고, 마멍=파파야. 돈은 헤알(R$).
+      const j=await withTimeout(FB_AI(`너는 '집 도우미' 앱이야. 아래 우리 집 데이터만 보고 질문에 ${langName()}로 짧고 친절하게 (1~3문장) 대답해. 데이터에 없으면 없다고 말해. 망가=망고, 마멍=파파야. 돈은 헤알(R$).
 데이터: ${JSON.stringify(data)}
 질문: """${q}"""
 JSON: {"answer":"..."}`),25000);
@@ -1056,6 +1099,7 @@ window.onVoice=text=>{ if(window.voiceMode==="ask"){window.voiceMode="";$("say")
 
 applyLang();
 render();
+pushAlarm();
 save(true); // 처음 열 때도 핸드폰 알림 목록 맞추기
 </script>
 </body>

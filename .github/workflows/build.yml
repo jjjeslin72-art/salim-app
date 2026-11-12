@@ -55,7 +55,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: 살림 알리미 테스트 ${{ github.run_number }}
+          name: 집 도우미 테스트 ${{ github.run_number }}
           body: 핸드폰에서 아래 APK 파일을 눌러 설치하세요.
           files: |
             SalimAlimi-${{ github.run_number }}.apk

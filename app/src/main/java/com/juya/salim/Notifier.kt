@@ -9,7 +9,18 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.media.AudioAttributes
+import android.media.MediaPlayer
+import android.media.RingtoneManager
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.provider.Settings
 import org.json.JSONArray
+import org.json.JSONObject
+import java.time.LocalTime
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -21,7 +32,8 @@ import java.time.temporal.ChronoUnit
  * sched 항목: {"n":이름, "k":"buy"|"spoil"|"low", "d":"기준 날짜", "on":"알리기 시작할 날짜"}
  */
 object Notifier {
-    private const val CH = "daily"
+    // 소리는 앱이 직접 냄 (볼륨·알람음·방해금지 설정 때문에) → 알림 자체는 조용한 채널
+    private const val CH = "daily_quiet"
     private const val NOTI_ID = 1
 
     fun pt(c: Context) = prefs(c).getString("lang", "ko") == "pt"
@@ -31,8 +43,10 @@ object Notifier {
     fun ensureChannel(c: Context) {
         val nm = c.getSystemService(NotificationManager::class.java)
         if (nm.getNotificationChannel(CH) == null) {
-            val ch = NotificationChannel(CH, "살림 알림 / Avisos", NotificationManager.IMPORTANCE_DEFAULT)
+            val ch = NotificationChannel(CH, "집 도우미 / Ajudante da Casa", NotificationManager.IMPORTANCE_HIGH)
             ch.description = "다시 살 물건, 먼저 먹을 재료 알림"
+            ch.setSound(null, null)
+            ch.enableVibration(false)
             nm.createNotificationChannel(ch)
         }
     }
@@ -100,7 +114,7 @@ object Notifier {
         val n = Notification.Builder(c, CH)
             .setSmallIcon(R.drawable.ic_stat)
             .setColor(0xFF3F8F5A.toInt())
-            .setContentTitle(if (force) (if (pt) "Aviso (teste)" else "살림 알림 (시험)")
+            .setContentTitle(if (force) (if (pt) "Aviso (teste)" else "집 도우미 (시험)")
                 else (if (pt) "Hoje: ${lines.size} item(ns) para ver" else "오늘 챙길 것 ${lines.size}개"))
             .setContentText(lines.first())
             .setStyle(style)
@@ -108,15 +122,74 @@ object Notifier {
             .setAutoCancel(true)
             .build()
         return try {
-            c.getSystemService(NotificationManager::class.java).notify(NOTI_ID, n); true
+            c.getSystemService(NotificationManager::class.java).notify(NOTI_ID, n)
+            ring(c, force)
+            true
         } catch (e: SecurityException) { false }
+    }
+
+    // ---------- 알람 소리 ----------
+    private fun alarm(c: Context): JSONObject =
+        try { JSONObject(prefs(c).getString("alarm", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }
+
+    fun soundUri(c: Context): Uri =
+        prefs(c).getString("soundUri", null)?.let { Uri.parse(it) } ?: Settings.System.DEFAULT_NOTIFICATION_URI
+
+    fun soundTitle(c: Context): String = try {
+        RingtoneManager.getRingtone(c, soundUri(c))?.getTitle(c) ?: ""
+    } catch (e: Exception) { "" }
+
+    private fun inQuiet(a: JSONObject): Boolean {
+        if (!a.optBoolean("quietOn", true)) return false
+        val s = a.optInt("quietStart", 22); val e = a.optInt("quietEnd", 7)
+        val h = LocalTime.now().hour
+        return if (s == e) false else if (s < e) h in s until e else (h >= s || h < e)
+    }
+
+    private var player: MediaPlayer? = null
+
+    /** 설정대로 소리·진동. preview=true 면 방해금지 무시하고 바로 들려줌 */
+    fun ring(c: Context, preview: Boolean = false) {
+        val a = alarm(c)
+        val mode = a.optString("sound", "sound")
+        val ignoreDnd = a.optString("dnd", "respect") == "ignore"
+        if (!preview) {
+            if (inQuiet(a)) return
+            val nm = c.getSystemService(NotificationManager::class.java)
+            if (!ignoreDnd && nm.currentInterruptionFilter > NotificationManager.INTERRUPTION_FILTER_ALL) return
+        }
+        if (mode == "silent") return
+        try {
+            val vib = c.getSystemService(Vibrator::class.java)
+            vib?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 400, 200, 400), -1))
+        } catch (e: Exception) { }
+        if (mode != "sound") return
+        try {
+            player?.release()
+            val vol = (a.optInt("volume", 80).coerceIn(0, 100)) / 100f
+            val p = MediaPlayer()
+            p.setAudioAttributes(AudioAttributes.Builder()
+                .setUsage(if (ignoreDnd) AudioAttributes.USAGE_ALARM else AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+            p.setDataSource(c, soundUri(c))
+            p.setVolume(vol, vol)
+            p.prepare()
+            p.setOnCompletionListener { it.release(); if (player === it) player = null }
+            p.start()
+            player = p
+            // 길어도 8초만
+            Handler(Looper.getMainLooper()).postDelayed({ try { if (player === p) { p.stop(); p.release(); player = null } } catch (e: Exception) { } }, 8000)
+        } catch (e: Exception) { }
     }
 }
 
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
+        val pending = goAsync()
         Notifier.fire(c)
         Notifier.scheduleNext(c)
+        // 소리가 끝날 때까지 잠깐 기다림
+        Handler(Looper.getMainLooper()).postDelayed({ pending.finish() }, 9000)
     }
 }
 

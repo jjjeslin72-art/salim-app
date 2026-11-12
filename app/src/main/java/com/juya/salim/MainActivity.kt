@@ -38,6 +38,7 @@ class MainActivity : Activity() {
     private lateinit var web: WebView
     private val VOICE_REQ = 7
     private val PHOTO_REQ = 8
+    private val SOUND_REQ = 9
     private var camUri: Uri? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
@@ -119,6 +120,18 @@ class MainActivity : Activity() {
     @Deprecated("simple result")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == SOUND_REQ) {
+            if (resultCode == RESULT_OK) {
+                @Suppress("DEPRECATION")
+                val u: Uri? = data?.getParcelableExtra(android.media.RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+                if (u != null) {
+                    Notifier.prefs(this).edit().putString("soundUri", u.toString()).apply()
+                    val title = Notifier.soundTitle(this)
+                    web.evaluateJavascript("window.onSoundPicked&&window.onSoundPicked(${JSONObject.quote(title)})", null)
+                }
+            }
+            return
+        }
         if (requestCode == PHOTO_REQ) {
             val uri = if (resultCode == RESULT_OK) (data?.data ?: camUri) else null
             val temp = camUri
@@ -258,6 +271,34 @@ class MainActivity : Activity() {
                 }
             }
         }
+
+        /** 알람 소리 설정 저장 (방식·볼륨·방해금지 시간·방해금지 모드) */
+        @JavascriptInterface
+        fun setAlarmPrefs(json: String) { Notifier.prefs(this@MainActivity).edit().putString("alarm", json).apply() }
+
+        @JavascriptInterface
+        fun soundTitle(): String = Notifier.soundTitle(this@MainActivity)
+
+        /** 핸드폰에 있는 알람음 중에서 고르기 */
+        @JavascriptInterface
+        fun pickSound() {
+            runOnUiThread {
+                val i = Intent(android.media.RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE,
+                        android.media.RingtoneManager.TYPE_NOTIFICATION or android.media.RingtoneManager.TYPE_ALARM)
+                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                    putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, Notifier.soundUri(this@MainActivity))
+                }
+                try {
+                    @Suppress("DEPRECATION")
+                    startActivityForResult(i, SOUND_REQ)
+                } catch (e: Exception) { Toast.makeText(this@MainActivity, "알람음 목록을 열 수 없어요", Toast.LENGTH_SHORT).show() }
+            }
+        }
+
+        @JavascriptInterface
+        fun previewSound() { runOnUiThread { Notifier.ring(this@MainActivity, true) } }
 
         /** 대답을 소리로 읽어 주기 */
         @JavascriptInterface
