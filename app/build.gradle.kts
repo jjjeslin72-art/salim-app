@@ -53,3 +53,8 @@ android {
         jvmTarget = "17"
     }
 }
+
+dependencies {
+    // 화면을 https 주소로 열어 서버(Firebase)와 안전하게 연결
+    implementation("androidx.webkit:webkit:1.12.1")
+}

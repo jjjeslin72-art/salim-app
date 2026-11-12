@@ -10,6 +10,18 @@ import android.os.Bundle
 import android.speech.RecognizerIntent
 import android.view.View
 import android.view.WindowInsets
+import android.content.ContentValues
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
+import android.net.Uri
+import android.provider.MediaStore
+import android.util.Base64
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import androidx.webkit.WebViewAssetLoader
+import java.io.ByteArrayOutputStream
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -23,6 +35,8 @@ class MainActivity : Activity() {
 
     private lateinit var web: WebView
     private val VOICE_REQ = 7
+    private val PHOTO_REQ = 8
+    private var camUri: Uri? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,11 +65,18 @@ class MainActivity : Activity() {
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
         web.settings.textZoom = 100
-        web.webViewClient = WebViewClient()
+        // 화면 파일을 https 주소로 열기 (서버 연결이 막히지 않게)
+        val loader = WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
+        web.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
+                loader.shouldInterceptRequest(request.url)
+        }
         web.webChromeClient = WebChromeClient()
         web.overScrollMode = View.OVER_SCROLL_NEVER
         web.addJavascriptInterface(Bridge(), "Android")
-        web.loadUrl("file:///android_asset/index.html")
+        web.loadUrl("https://appassets.androidplatform.net/assets/index.html")
 
         // 알림 허락 받기 (안드로이드 13 이상)
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -89,10 +110,53 @@ class MainActivity : Activity() {
     @Deprecated("simple result")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == PHOTO_REQ) {
+            val uri = if (resultCode == RESULT_OK) (data?.data ?: camUri) else null
+            val temp = camUri
+            camUri = null
+            if (uri == null) { temp?.let { try { contentResolver.delete(it, null, null) } catch (e: Exception) {} }; return }
+            Thread {
+                val b64 = try { encodePhoto(uri) } catch (e: Exception) { null }
+                // 찍은 영수증 사진은 갤러리에 남기지 않음
+                if (temp != null && uri == temp) try { contentResolver.delete(temp, null, null) } catch (e: Exception) {}
+                runOnUiThread {
+                    if (b64 == null) Toast.makeText(this, "사진을 열 수 없어요 / Não abriu a foto", Toast.LENGTH_LONG).show()
+                    else web.evaluateJavascript("window.onReceiptImage&&window.onReceiptImage('$b64')", null)
+                }
+            }.start()
+            return
+        }
         if (requestCode == VOICE_REQ && resultCode == RESULT_OK) {
             val text = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() ?: return
             web.evaluateJavascript("window.onVoice&&window.onVoice(${JSONObject.quote(text)})", null)
         }
+    }
+
+    /** 사진을 1600px 이하 JPEG로 줄이고 바로 세워서 base64로 */
+    private fun encodePhoto(uri: Uri): String {
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        contentResolver.openInputStream(uri)!!.use { BitmapFactory.decodeStream(it, null, opts) }
+        var sample = 1
+        while (maxOf(opts.outWidth, opts.outHeight) / (sample * 2) >= 1600) sample *= 2
+        val bmp0 = contentResolver.openInputStream(uri)!!.use {
+            BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+        }!!
+        val rot = try {
+            contentResolver.openInputStream(uri)!!.use {
+                when (ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+                    ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                    ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                    ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                    else -> 0f
+                }
+            }
+        } catch (e: Exception) { 0f }
+        val scale = minOf(1f, 1600f / maxOf(bmp0.width, bmp0.height))
+        val m = Matrix().apply { postScale(scale, scale); postRotate(rot) }
+        val bmp: Bitmap = Bitmap.createBitmap(bmp0, 0, 0, bmp0.width, bmp0.height, m, true)
+        val out = ByteArrayOutputStream()
+        bmp.compress(Bitmap.CompressFormat.JPEG, 82, out)
+        return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
     }
 
     inner class Bridge {
@@ -101,8 +165,9 @@ class MainActivity : Activity() {
 
         /** 화면에서 저장할 때마다: 전체 데이터 + 알림 목록 + 알림 시간 */
         @JavascriptInterface
-        fun saveState(json: String, sched: String, hour: Int) {
+        fun saveState(json: String, sched: String, hour: Int, lang: String) {
             Notifier.prefs(this@MainActivity).edit()
+                .putString("lang", lang)
                 .putString("state", json)
                 .putString("sched", sched)
                 .putInt("hour", hour.coerceIn(0, 23))
@@ -115,14 +180,44 @@ class MainActivity : Activity() {
             runOnUiThread {
                 val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ko-KR")
-                    putExtra(RecognizerIntent.EXTRA_PROMPT, "산 물건이나 해먹은 음식을 말해 주세요")
+                    val pt = Notifier.prefs(this@MainActivity).getString("lang", "ko") == "pt"
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (pt) "pt-BR" else "ko-KR")
+                    putExtra(RecognizerIntent.EXTRA_PROMPT, if (pt) "Fale o que comprou ou cozinhou" else "산 물건이나 해먹은 음식을 말해 주세요")
                 }
                 try {
                     @Suppress("DEPRECATION")
                     startActivityForResult(i, VOICE_REQ)
                 } catch (e: Exception) {
                     Toast.makeText(this@MainActivity, "이 핸드폰에서는 음성 입력을 쓸 수 없어요", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+
+        /** 영수증 사진: "camera" 또는 "gallery" */
+        @JavascriptInterface
+        fun pickReceipt(mode: String) {
+            runOnUiThread {
+                try {
+                    if (mode == "camera" && Build.VERSION.SDK_INT >= 29) {
+                        val v = ContentValues().apply {
+                            put(MediaStore.Images.Media.DISPLAY_NAME, "receipt_${System.currentTimeMillis()}.jpg")
+                            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/SalimAlimi")
+                        }
+                        camUri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v)
+                        val i = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+                            .putExtra(MediaStore.EXTRA_OUTPUT, camUri)
+                            .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                        @Suppress("DEPRECATION")
+                        startActivityForResult(i, PHOTO_REQ)
+                    } else {
+                        val i = Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE)
+                        @Suppress("DEPRECATION")
+                        startActivityForResult(Intent.createChooser(i, "영수증 / Cupom"), PHOTO_REQ)
+                    }
+                } catch (e: Exception) {
+                    camUri = null
+                    Toast.makeText(this@MainActivity, "카메라를 열 수 없어요 / Não abriu a câmera", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -135,7 +230,7 @@ class MainActivity : Activity() {
                     type = "text/plain"
                     putExtra(Intent.EXTRA_TEXT, text)
                 }
-                startActivity(Intent.createChooser(send, "장보기 목록 보내기"))
+                startActivity(Intent.createChooser(send, "📤"))
             }
         }
 
@@ -146,11 +241,11 @@ class MainActivity : Activity() {
                 if (Build.VERSION.SDK_INT >= 33 &&
                     checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                     requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
-                    Toast.makeText(this@MainActivity, "알림을 '허용'으로 바꿔 주세요", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity, "알림 허용 / Permita avisos", Toast.LENGTH_LONG).show()
                     return@runOnUiThread
                 }
                 if (!Notifier.fire(this@MainActivity, true)) {
-                    Toast.makeText(this@MainActivity, "지금은 알릴 게 없어요 😊", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, if (Notifier.pt(this@MainActivity)) "Nada para avisar agora 😊" else "지금은 알릴 게 없어요 😊", Toast.LENGTH_SHORT).show()
                 }
             }
         }

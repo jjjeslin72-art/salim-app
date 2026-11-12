@@ -24,12 +24,14 @@ object Notifier {
     private const val CH = "daily"
     private const val NOTI_ID = 1
 
+    fun pt(c: Context) = prefs(c).getString("lang", "ko") == "pt"
+
     fun prefs(c: Context): SharedPreferences = c.getSharedPreferences("salim", Context.MODE_PRIVATE)
 
     fun ensureChannel(c: Context) {
         val nm = c.getSystemService(NotificationManager::class.java)
         if (nm.getNotificationChannel(CH) == null) {
-            val ch = NotificationChannel(CH, "살림 알림", NotificationManager.IMPORTANCE_DEFAULT)
+            val ch = NotificationChannel(CH, "살림 알림 / Avisos", NotificationManager.IMPORTANCE_DEFAULT)
             ch.description = "다시 살 물건, 먼저 먹을 재료 알림"
             nm.createNotificationChannel(ch)
         }
@@ -56,6 +58,7 @@ object Notifier {
         val raw = prefs(c).getString("sched", "") ?: ""
         if (raw.isBlank()) return emptyList()
         val today = LocalDate.now()
+        val pt = pt(c)
         val urgent = mutableListOf<String>()
         val soon = mutableListOf<String>()
         try {
@@ -67,14 +70,15 @@ object Notifier {
                 val name = o.optString("n")
                 val d = try { ChronoUnit.DAYS.between(today, LocalDate.parse(o.optString("d"))) } catch (e: Exception) { 0L }
                 when (o.optString("k")) {
-                    "buy" -> if (d <= 0) urgent.add("🧻 $name — 지금 사야 해요!") else soon.add("🧻 $name — ${d}일 후 다시 사세요")
+                    "buy" -> if (d <= 0) urgent.add(if (pt) "🧻 $name — compre agora!" else "🧻 $name — 지금 사야 해요!")
+                             else soon.add(if (pt) "🧻 $name — comprar em $d dia(s)" else "🧻 $name — ${d}일 후 다시 사세요")
                     "spoil" -> when {
                         d < -3 -> {}  // 너무 지난 건 그만 알림
-                        d < 0 -> urgent.add("⚠️ $name — 상했을 수 있어요, 확인하세요")
-                        d == 0L -> urgent.add("🥬 $name — 오늘까지 드세요")
-                        else -> soon.add("🥬 $name — ${d}일 안에 드세요")
+                        d < 0 -> urgent.add(if (pt) "⚠️ $name — pode ter estragado, confira" else "⚠️ $name — 상했을 수 있어요, 확인하세요")
+                        d == 0L -> urgent.add(if (pt) "🥬 $name — consuma hoje" else "🥬 $name — 오늘까지 드세요")
+                        else -> soon.add(if (pt) "🥬 $name — consuma em $d dia(s)" else "🥬 $name — ${d}일 안에 드세요")
                     }
-                    "low" -> soon.add("🛒 $name — 거의 다 먹었어요")
+                    "low" -> soon.add(if (pt) "🛒 $name — está acabando" else "🛒 $name — 거의 다 먹었어요")
                 }
             }
         } catch (e: Exception) { }
@@ -91,11 +95,13 @@ object Notifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val style = Notification.InboxStyle()
         lines.take(7).forEach { style.addLine(it) }
-        if (lines.size > 7) style.setSummaryText("외 ${lines.size - 7}개 더")
+        val pt = pt(c)
+        if (lines.size > 7) style.setSummaryText(if (pt) "+${lines.size - 7}" else "외 ${lines.size - 7}개 더")
         val n = Notification.Builder(c, CH)
             .setSmallIcon(R.drawable.ic_stat)
             .setColor(0xFF3F8F5A.toInt())
-            .setContentTitle(if (force) "살림 알림 (시험)" else "오늘 챙길 것 ${lines.size}개")
+            .setContentTitle(if (force) (if (pt) "Aviso (teste)" else "살림 알림 (시험)")
+                else (if (pt) "Hoje: ${lines.size} item(ns) para ver" else "오늘 챙길 것 ${lines.size}개"))
             .setContentText(lines.first())
             .setStyle(style)
             .setContentIntent(open)
