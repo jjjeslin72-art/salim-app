@@ -785,7 +785,7 @@ function showUsePreview(used,text,comment,after){
 // ================= 한 곳 입력: 산 것 / 쓴 것 / 질문 나누기 =================
 const RE_Q=/\?|몇\s*(개|롤|통)?|있(니|나|냐|어\?|어요\?|을까)|남았(니|나|어\?|어요\?)|언제|얼마나|뭐\s*(사|해먹)|알려\s*줘|\btem\b|quanto|quantos|quantas|quando|\?$/i;
 const RE_BUY=/샀|삿|사\s*왔|사\s*왓|사\s*옴|사\s*놨|사\s*놓|사\s*둠|사\s*뒀|구입|구매|장\s*(봤|봣|봄|보고)|주문|시켰|시켯|배달\s*(왔|왓|옴)|택배|들여\s*놨|쟁여|comprei|compramos|comprado|compras?\b|peguei no mercado/i;
-const RE_USE=/먹었|먹엇|먹음|먹은|해\s*먹|썼|썻|씀|쓴\s|써\s*버|사용|소비|다\s*떨어|떨어졌|떨어졋|떨어짐|없어졌|바닥|버렸|버렷|버림|상해서|만들었|만들엇|요리|끓였|끓엿|구웠|볶았|usei|comi|fiz|cozinhei|acabou|gastei|joguei|terminou/i;
+const RE_USE=/먹었|먹엇|먹음|먹은|먹고|마셨|마셧|마심|쓰고|사용|소비|꺼내\s*[썼썻]|해\s*먹|썼|썻|씀|쓴\s|써\s*버|사용|소비|다\s*떨어|떨어졌|떨어졋|떨어짐|없어졌|바닥|버렸|버렷|버림|상해서|만들었|만들엇|요리|끓였|끓엿|구웠|볶았|usei|comi|fiz|cozinhei|acabou|gastei|joguei|terminou/i;
 function splitClauses(text){
   return text.replace(/([샀삿]고|[샀삿]어요?|[샀삿]다|[샀삿]음|구매했?고?|구입했?고?|구매함|구입함|먹[었엇]고|먹[었엇]어요?|[썼썻]고|[썼썻]어요?|[했햇]고|[했햇]어요?|[었엇]고|[았앗]고|[었엇]어요?|[았앗]어요?)(?=\s|,|$)/g,"$1|")
     .split(/[|\n,.;!]+|그리고|\be\b(?=\s+(?:comprei|usei|fiz|comi))/).map(x=>(x||"").trim()).filter(Boolean);
@@ -826,7 +826,7 @@ async function onSmart(){
       const inv=state.items.filter(i=>nowQty(i)>0).map(i=>({name:i.name,qty:r1(nowQty(i)),unit:i.unit||"개",cat:i.cat}));
       const j=await withTimeout(FB_AI(`너는 '집 도우미' 앱이야. 사용자가 집 살림에 대해 한 번에 말했어(한국어 또는 브라질 포르투갈어). 가족 ${state.settings.people}명, 화장실 ${state.settings.bathrooms}개. 망가=망고, 마멍=파파야, 휴지=화장지.
 지금 재고: ${JSON.stringify(inv)}
-사람마다 말이 달라: 샀어·삿어·구매·구입·사왔어·장봤어·주문했어 = 산 것 / 먹었어·해먹었어·썼어·썻어·사용·다 떨어졌어·버렸어 = 사용한 것. 맞춤법이 틀려도(ㅅ/ㅆ 등) 뜻으로 알아들어.
+사람마다 말이 달라: 샀어·삿어·구매·구입·사왔어·장봤어·주문했어 = 산 것 / 먹었어·먹엇어·해먹었어·마셨어·썼어·썻어·사용했어·소비햇어·다 떨어졌어·버렸어 = 사용한 것. 맞춤법이 틀려도(ㅅ/ㅆ 등) 뜻으로 알아들어.
 말한 내용을 세 가지로 나눠:
 1) buy: 새로 산 물건. 규칙:
 ${ITEM_RULES()}
