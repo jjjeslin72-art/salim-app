@@ -122,6 +122,7 @@
         <button class="btn-green" id="bBuy">🛒 <span data-pt="Comprei">샀어요</span></button>
         <button class="btn-orange" id="bAte">🍳 <span data-pt="Cozinhei">해먹었어요</span></button>
       </div>
+      <button class="btn-blue full" id="bAsk" style="margin-top:10px">❓ <span data-pt="Perguntar (ex.: quantas batatas-doces restam?)">물어보기 (예: 고구마 몇 개 남았어?)</span></button>
       <p class="muted" style="margin:10px 0 0" data-pt="Em 'Cozinhei', calculo a média dos ingredientes usados para o tamanho da sua família.">'해먹었어요'를 누르면 음식에 보통 들어가는 재료를 가족 수에 맞춰 평균치로 빼 드려요.</p>
     </div>
 
@@ -888,6 +889,63 @@ async function startFamily(){
 }
 window.addEventListener("fb-ready",()=>{ if(local.familyCode) startFamily(); });
 
+// ================= 물어보기 =================
+function answerLocal(q){
+  const t=q.toLowerCase();
+  const hits=state.items.filter(it=>{
+    const c=canon(it.name);
+    if(t.includes(it.name.toLowerCase())||t.includes(c)) return true;
+    return Object.entries(ALIAS).some(([k,v])=>v===c&&t.includes(k));
+  });
+  if(hits.length){
+    return hits.map(it=>{
+      const q2=`${r1(it.cat==="home"?homeNow(it):it.qty)}${unitOf(it)}`;
+      if(it.cat==="food"){
+        if(it.qty<=0) return L(`${it.name}는 다 먹었어요. 장보기 목록에 넣어 뒀어요.`,`${it.name}: acabou. Já está na lista de compras.`);
+        const left=diff(today(),foodSpoil(it)), where={fridge:L("냉장고","geladeira"),freezer:L("냉동실","freezer"),room:L("실온","fora da geladeira")}[it.loc||"fridge"];
+        const fresh=left<0?L("오래돼서 상했을 수 있으니 확인해 보세요.","Pode ter estragado, confira."):left===0?L("오늘까지 드세요.","Consuma hoje."):L(`${left}일 더 괜찮아요.`,`Bom por mais ${left} dia(s).`);
+        return L(`${it.name} ${q2} 남았어요 (${where}). ${md(it.bought)}에 샀고, ${fresh}`,`${it.name}: restam ${q2} (${where}). Comprado em ${md(it.bought)}. ${fresh}`);
+      }
+      const by=homeBuyBy(it), left=diff(today(),by);
+      return L(`${it.name} 약 ${q2} 남았어요. ${left<=0?"지금 사야 해요!":md(by)+"까지 사면 돼요 ("+left+"일 남음)."}`,`${it.name}: restam ~${q2}. ${left<=0?"Compre agora!":"Compre até "+md(by)+" ("+left+" dias)."}`);
+    }).join("\n");
+  }
+  // 아는 물건 이름인데 등록이 안 된 경우
+  const names=[...Object.keys(SHELF),...Object.keys(HOME),...Object.keys(ALIAS)].sort((a,b)=>b.length-a.length);
+  const named=names.find(n=>n.length>=2&&t.includes(n.toLowerCase()));
+  if(named) return L(`${named}는 지금 등록된 게 없어요. 사셨으면 '샀어요'로 넣어 주세요.`,`Não tem ${named} cadastrado. Se comprou, use 'Comprei'.`);
+  return null;
+}
+async function onAsk(){
+  const q=$("say").value.trim();
+  if(!q){ if(APP){window.voiceMode="ask";Android.startVoice();} else toast(L("물어볼 것을 적어 주세요","Escreva a pergunta")); return; }
+  let ans=answerLocal(q);
+  if(!ans && hasAI()){
+    const btn=$("bAsk"); busy(btn,true,L("생각 중","Pensando"));
+    try{
+      const mo=today().slice(0,7);
+      const data={오늘:today(),가족:state.settings.people,
+        식재료:state.items.filter(i=>i.cat==="food").map(i=>({이름:i.name,남은:r1(i.qty),단위:i.unit,보관:i.loc||"fridge",산날:i.bought,신선까지:foodSpoil(i)})),
+        생활용품:state.items.filter(i=>i.cat==="home").map(i=>({이름:i.name,남은약:r1(homeNow(i)),단위:i.unit,사야할날:homeBuyBy(i)})),
+        장보기목록:autoShop().map(a=>a.name).concat(state.shop.filter(x=>!x.done).map(x=>x.name)),
+        이번달지출:state.purchases.filter(p=>p.date.slice(0,7)===mo&&+p.price>0).map(p=>({이름:p.name,금액:p.price,날:p.date}))};
+      const j=await withTimeout(FB_AI(`너는 우리 집 살림 도우미야. 아래 우리 집 데이터만 보고 질문에 ${langName()}로 짧고 친절하게 (1~3문장) 대답해. 데이터에 없으면 없다고 말해. 망가=망고, 마멍=파파야. 돈은 헤알(R$).
+데이터: ${JSON.stringify(data)}
+질문: """${q}"""
+JSON: {"answer":"..."}`),25000);
+      ans=j.answer;
+    }catch(e){ console.warn(e); }
+    busy(btn,false);
+  }
+  if(!ans) ans=L("잘 모르겠어요. 이렇게 물어봐 주세요: 고구마 몇 개 남았어? / 화장지 언제 사야 돼?","Não entendi. Pergunte assim: quantas batatas restam?");
+  openModal(`<h3>❓ ${esc(q)}</h3><div style="font-size:19px;line-height:1.6;white-space:pre-line;background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px">${esc(ans)}</div>
+  <div class="two"><button class="btn-ghost" id="mCancel">${L("닫기","Fechar")}</button><button class="btn-blue" id="mAgain">🎤 ${L("또 물어보기","Perguntar de novo")}</button></div>`);
+  $("mCancel").onclick=closeModal;
+  $("mAgain").onclick=()=>{closeModal();$("say").value="";if(APP){window.voiceMode="ask";Android.startVoice();}else $("say").focus();};
+  $("say").value="";
+  if(APP) try{Android.speak(ans);}catch(e){}
+}
+
 // ================= 직접 추가/수정 =================
 function editItem(it,cat){
   const isNew=!it; it=it||{id:uid(),cat,name:"",qty:1,unit:cat==="home"?"롤":"개",bought:today(),shelf:7,loc:"fridge",personDays:cat==="home"?30:undefined};
@@ -975,7 +1033,7 @@ document.addEventListener("change",e=>{
   else { const m=state.shop.find(x=>"m:"+x.id===key); if(m) m.done=cb.checked; }
   save();render();
 });
-$("bBuy").onclick=onBuy; $("bAte").onclick=onAte;
+$("bBuy").onclick=onBuy; $("bAte").onclick=onAte; $("bAsk").onclick=onAsk;
 $("shopAdd").onclick=()=>{const v=$("shopNew").value.trim();if(!v)return;
   v.split(/[,，]/).map(s=>s.trim()).filter(Boolean).forEach(n=>state.shop.push({id:uid(),name:n,done:false}));
   $("shopNew").value="";save();render();};
@@ -993,8 +1051,8 @@ $("bReset").onclick=function(){
   if(!this.dataset.sure){this.dataset.sure="1";this.textContent=L("정말 다 지울까요? 한 번 더 누르세요","Apagar tudo? Toque de novo");return;}
   state=fresh();save();render();this.dataset.sure="";applyLang();toast(L("새로 시작해요","Recomeçando"));
 };
-$("mic").onclick=()=>{ if(APP) Android.startVoice(); else toast(L("핸드폰 앱에서 쓸 수 있어요. 키보드의 🎤도 돼요","Use o 🎤 do teclado")); };
-window.onVoice=text=>{ $("say").value=($("say").value.trim()?$("say").value.trim()+" ":"")+text; toast(L("들었어요: ","Ouvi: ")+text); };
+$("mic").onclick=()=>{ window.voiceMode=""; if(APP) Android.startVoice(); else toast(L("핸드폰 앱에서 쓸 수 있어요. 키보드의 🎤도 돼요","Use o 🎤 do teclado")); };
+window.onVoice=text=>{ if(window.voiceMode==="ask"){window.voiceMode="";$("say").value=text;onAsk();return;} $("say").value=($("say").value.trim()?$("say").value.trim()+" ":"")+text; toast(L("들었어요: ","Ouvi: ")+text); };
 
 applyLang();
 render();

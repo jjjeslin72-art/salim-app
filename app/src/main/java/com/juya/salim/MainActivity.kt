@@ -22,6 +22,8 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import androidx.webkit.WebViewAssetLoader
 import java.io.ByteArrayOutputStream
+import android.speech.tts.TextToSpeech
+import java.util.Locale
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -37,6 +39,8 @@ class MainActivity : Activity() {
     private val VOICE_REQ = 7
     private val PHOTO_REQ = 8
     private var camUri: Uri? = null
+    private var tts: TextToSpeech? = null
+    private var ttsReady = false
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -100,6 +104,11 @@ class MainActivity : Activity() {
 
     @Deprecated("old devices")
     override fun onBackPressed() { handleBack() }
+
+    override fun onDestroy() {
+        tts?.shutdown()
+        super.onDestroy()
+    }
 
     override fun onResume() {
         super.onResume()
@@ -247,6 +256,21 @@ class MainActivity : Activity() {
                 if (!Notifier.fire(this@MainActivity, true)) {
                     Toast.makeText(this@MainActivity, if (Notifier.pt(this@MainActivity)) "Nada para avisar agora 😊" else "지금은 알릴 게 없어요 😊", Toast.LENGTH_SHORT).show()
                 }
+            }
+        }
+
+        /** 대답을 소리로 읽어 주기 */
+        @JavascriptInterface
+        fun speak(text: String) {
+            runOnUiThread {
+                val pt = Notifier.pt(this@MainActivity)
+                val go = {
+                    tts?.language = if (pt) Locale("pt", "BR") else Locale.KOREAN
+                    tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "ans")
+                }
+                if (tts == null) {
+                    tts = TextToSpeech(this@MainActivity) { st -> ttsReady = st == TextToSpeech.SUCCESS; if (ttsReady) go() }
+                } else if (ttsReady) go()
             }
         }
 
