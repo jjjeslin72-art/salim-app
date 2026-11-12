@@ -113,17 +113,13 @@
   <section class="view on" id="v-home">
     <div class="card">
       <h2>🗣️ <span data-pt="Me conte">말로 알려주세요</span></h2>
-      <textarea id="say" data-ko-ph="예) 오이 5개, 망가 5개, 마멍 5개, 사과 5개, 당근 5개, 호박 2개, 감자 5개, 양파 7개 샀어&#10;예) 오늘 김치찌개랑 오이무침 해먹었어" data-pt-ph="Ex.: comprei 5 pepinos, 5 mangas, 2 abobrinhas e 7 cebolas&#10;Ex.: hoje fiz strogonoff e salada"></textarea>
+      <textarea id="say" data-ko-ph="예) 오이 5개, 망가 5개, 화장지 12롤 샀어&#10;예) 카레 해먹었고 샴푸 다 썼어&#10;예) 집에 휴지 있니?" data-pt-ph="Ex.: comprei 5 pepinos e 12 rolos de papel higiênico&#10;Ex.: fiz strogonoff e acabou o xampu&#10;Ex.: tem papel higiênico?"></textarea>
       <div class="two">
         <button class="soft-blue" id="mic">🎤 <span data-pt="Falar">말하기</span></button>
         <button class="soft-blue" id="bReceipt">🧾 <span data-pt="Foto do cupom">영수증 사진</span></button>
       </div>
-      <div class="two">
-        <button class="btn-green" id="bBuy">🛒 <span data-pt="Comprei">샀어요</span></button>
-        <button class="btn-orange" id="bAte">🍽️ <span data-pt="Usei">사용했어요</span></button>
-      </div>
-      <button class="btn-blue full" id="bAsk" style="margin-top:10px">❓ <span data-pt="Perguntar (ex.: quantas batatas-doces restam?)">물어보기 (예: 고구마 몇 개 남았어?)</span></button>
-      <p class="muted" style="margin:10px 0 0" data-pt="Em 'Usei', diga o que cozinhou ou usou e eu desconto a média dos ingredientes para a sua família.">'사용했어요'를 누르면 해먹은 음식에 보통 들어가는 재료를 가족 수에 맞춰 평균치로 빼 드려요.</p>
+      <button class="btn-green full" id="bGo" style="margin-top:10px;font-size:19px;padding:15px">✅ <span data-pt="Enviar">입력하기</span></button>
+      <p class="muted" style="margin:10px 0 0" data-pt="Fale tudo junto: o que comprou, o que usou ou cozinhou, ou uma pergunta. Eu separo geladeira, casa e lista sozinho.">산 것, 사용한 것(해먹은 음식), 궁금한 것을 한 번에 말하면 알아서 나눠서 냉장고·생활용품에 넣어 드려요.</p>
     </div>
 
     <div class="card">
@@ -558,7 +554,7 @@ const toNum=s=>/^\d/.test(s)?+String(s).replace(",","."):NUMW[s.toLowerCase()];
 function parseBuy(text){
   const out=[];
   const known=n=>{const c=canon(n);return SHELF[c]!=null||HOME[c]!=null||EMO[c]!=null;};
-  const t=text.replace(/(이번\s*주에?|오늘|어제|그리고|샀어요?|샀다|샀음|구입했어요?|구입|사왔어요?|사 왔어요?|comprei|hoje|ontem)/gi," ");
+  const t=text.replace(/(이번\s*주에?|오늘|어제|아까|그리고|[샀삿](어요?|다|음|고|습니다)?|구매(했어요?|했음|함|했고|했다)?|구입(했어요?|했음|함|했고|했다)?|사\s*[왔왓](어요?|고)?|사\s*옴|사\s*[놨놧](어요?|고)?|장\s*[봤봣](어요?|고)?|주문(했어요?|함)?|시[켰켯](어요?|고)?|comprei|compramos|hoje|ontem)/gi," ");
   // 한국어 순서: 이름 + 숫자 + 단위
   const re=new RegExp("([가-힣]+)\\s*("+NUMRE+")\\s*(개|롤|통|팩|봉지|봉|병|묶음|kg|키로|단|송이|모|판|포대|줄|알|마리|덩이|박스)?","g");
   let m;
@@ -627,7 +623,7 @@ JSON: {"items":[{"name":"오이","qty":5,"unit":"개","cat":"food","loc":"fridge
   showBuyPreview(items, L("🛒 이렇게 넣을까요?","🛒 Posso colocar assim?"));
 }
 
-function showBuyPreview(items,title,total){
+function showBuyPreview(items,title,total,after){
   openModal(`<h3>${title}</h3><p class="muted">${L("개수·종류·금액이 다르면 고쳐 주세요. 금액은 안 넣어도 돼요.","Corrija quantidade, tipo ou preço se precisar. O preço é opcional.")}</p>
   ${total?`<p class="muted">${L("영수증 합계","Total do cupom")}: <b>${brl(total)}</b></p>`:""}
   ${items.map((it,i)=>`<div class="prow" style="flex-wrap:wrap"><input type="checkbox" checked data-i="${i}">
@@ -644,7 +640,7 @@ function showBuyPreview(items,title,total){
       <input type="number" step="0.01" min="0" data-p="${i}" value="${it.price||""}" placeholder="R$" style="width:96px">
     </div></div>`).join("")}
   <div class="two"><button class="btn-ghost" id="mCancel">${L("취소","Cancelar")}</button><button class="btn-green" id="mOk">${L("넣기","Salvar")}</button></div>`);
-  $("mCancel").onclick=closeModal;
+  $("mCancel").onclick=()=>{closeModal();if(after)after();};
   $("mOk").onclick=()=>{
     const t=today(), names=[];
     items.forEach((it,i)=>{
@@ -674,6 +670,7 @@ function showBuyPreview(items,title,total){
     state.purchases=state.purchases.slice(-1500);
     if(names.length) addLog("buy",names.join(", "));
     save();render();closeModal();$("say").value="";toast(L("넣었어요! 👍","Salvo! 👍"));
+    if(after) after();
   };
 }
 
@@ -763,21 +760,100 @@ JSON: {"used":[{"name":"오이","qty":2,"why":"오이무침"}],"comment":"${lang
   }
   showUsePreview(used,text,comment||L("이 음식은 아직 몰라서, 쓴 재료를 직접 넣어 주세요.","Não conheço esse prato. Coloque os ingredientes usados."));
 }
-function showUsePreview(used,text,comment){
-  const foods=state.items.filter(i=>i.cat==="food"&&i.qty>0);
-  const rows=foods.map(f=>{const u=used.find(x=>x.it.id===f.id);return {it:f,qty:u?u.qty:0,why:u?u.why:""};}).sort((a,b)=>b.qty-a.qty);
+const nowQty=it=>it.cat==="home"?homeNow(it):it.qty;
+function showUsePreview(used,text,comment,after){
+  const all=state.items.filter(i=>nowQty(i)>0);
+  const rows=all.map(f=>{const u=used.find(x=>x.it.id===f.id);return {it:f,qty:u?u.qty:0,why:u?u.why:""};})
+    .filter(r=>r.qty>0||r.it.cat==="food").sort((a,b)=>b.qty-a.qty);
   openModal(`<h3>🍳 ${L("이만큼 쓴 것 같아요","Acho que usou isto")}</h3><p class="muted">${esc(comment)} ${L("다르면 숫자를 고쳐 주세요.","Corrija se precisar.")}</p>
   ${rows.map((r,i)=>`<div class="prow" style="${r.qty?"":"opacity:.6"}"><span style="font-size:24px">${emojiOf(r.it)}</span>
-    <div class="grow"><b>${esc(r.it.name)}</b><div class="muted">${L("남은","resta")} ${r1(r.it.qty)}${esc(unitOf(r.it))}${r.why?" · "+esc(r.why):""}</div></div>
-    <span>−</span><input type="number" step="0.5" min="0" max="${r.it.qty}" value="${r1(r.qty)}" data-u="${i}"><span>${esc(unitOf(r.it))}</span></div>`).join("")}
+    <div class="grow"><b>${esc(r.it.name)}</b><div class="muted">${r.it.cat==="home"?"🧻 ":""}${L("남은","resta")} ${r1(nowQty(r.it))}${esc(unitOf(r.it))}${r.why?" · "+esc(r.why):""}</div></div>
+    <span>−</span><input type="number" step="0.5" min="0" max="${r1(nowQty(r.it))}" value="${r1(r.qty)}" data-u="${i}"><span>${esc(unitOf(r.it))}</span></div>`).join("")}
   <div class="two"><button class="btn-ghost" id="mCancel">${L("취소","Cancelar")}</button><button class="btn-orange" id="mOk">${L("빼기","Descontar")}</button></div>`);
-  $("mCancel").onclick=closeModal;
+  $("mCancel").onclick=()=>{closeModal();if(after)after();};
   $("mOk").onclick=()=>{
     const parts=[];
-    rows.forEach((r,i)=>{const q=Math.min(r.it.qty,Math.max(0,+modal.querySelector(`[data-u="${i}"]`).value||0));if(q>0){r.it.qty=r1(r.it.qty-q);parts.push(`${r.it.name} −${r1(q)}`);}});
+    rows.forEach((r,i)=>{const have=nowQty(r.it);const q=Math.min(have,Math.max(0,+modal.querySelector(`[data-u="${i}"]`).value||0));if(q>0){
+      if(r.it.cat==="home"){r.it.qty=r1(have-q);r.it.bought=today();} else r.it.qty=r1(r.it.qty-q);
+      parts.push(`${r.it.name} −${r1(q)}`);}});
     addLog("ate",text+(parts.length?` (${parts.join(", ")})`:""));
     save();render();closeModal();$("say").value="";toast(L("재고에서 뺐어요 🍽️","Descontado 🍽️"));
+    if(after) after();
   };
+}
+
+// ================= 한 곳 입력: 산 것 / 쓴 것 / 질문 나누기 =================
+const RE_Q=/\?|몇\s*(개|롤|통)?|있(니|나|냐|어\?|어요\?|을까)|남았(니|나|어\?|어요\?)|언제|얼마나|뭐\s*(사|해먹)|알려\s*줘|\btem\b|quanto|quantos|quantas|quando|\?$/i;
+const RE_BUY=/샀|삿|사\s*왔|사\s*왓|사\s*옴|사\s*놨|사\s*놓|사\s*둠|사\s*뒀|구입|구매|장\s*(봤|봣|봄|보고)|주문|시켰|시켯|배달\s*(왔|왓|옴)|택배|들여\s*놨|쟁여|comprei|compramos|comprado|compras?\b|peguei no mercado/i;
+const RE_USE=/먹었|먹엇|먹음|먹은|해\s*먹|썼|썻|씀|쓴\s|써\s*버|사용|소비|다\s*떨어|떨어졌|떨어졋|떨어짐|없어졌|바닥|버렸|버렷|버림|상해서|만들었|만들엇|요리|끓였|끓엿|구웠|볶았|usei|comi|fiz|cozinhei|acabou|gastei|joguei|terminou/i;
+function splitClauses(text){
+  return text.replace(/([샀삿]고|[샀삿]어요?|[샀삿]다|[샀삿]음|구매했?고?|구입했?고?|구매함|구입함|먹[었엇]고|먹[었엇]어요?|[썼썻]고|[썼썻]어요?|[했햇]고|[했햇]어요?|[었엇]고|[았앗]고|[었엇]어요?|[았앗]어요?)(?=\s|,|$)/g,"$1|")
+    .split(/[|\n,.;!]+|그리고|\be\b(?=\s+(?:comprei|usei|fiz|comi))/).map(x=>(x||"").trim()).filter(Boolean);
+}
+function homeUseLocal(text){
+  const t=text.toLowerCase(), out=[];
+  for(const it of state.items.filter(i=>i.cat==="home"&&homeNow(i)>0)){
+    const c=canon(it.name);
+    const keys=[it.name.toLowerCase(),c,...Object.entries(ALIAS).filter(([k,v])=>v===c).map(([k])=>k.toLowerCase())];
+    const k=keys.find(k=>k&&t.includes(k)); if(!k) continue;
+    const after=t.slice(t.indexOf(k)+k.length,t.indexOf(k)+k.length+10);
+    const m=after.match(new RegExp("("+NUMRE+")"));
+    const all=/다\s*([썼썻]|씀|떨어)|떨어[졌졋짐]|없어|바닥|acabou|todo/.test(t);
+    const q=m?toNum(m[1]):(all?homeNow(it):1);
+    out.push({it,qty:Math.min(homeNow(it),q||1),why:all?L("다 씀","acabou"):L("사용","usado")});
+  }
+  return out;
+}
+async function onSmart(){
+  const text=$("say").value.trim();
+  if(!text){ if(APP){window.voiceMode="smart";Android.startVoice();} else toast(L("말하거나 적어 주세요","Fale ou escreva")); return; }
+  let buy=[], used=[], question="", comment="";
+  // 1) 내 핸드폰 안에서 먼저 나누기
+  const buyC=[], useC=[], qC=[];
+  for(const c of splitClauses(text)){
+    if(RE_BUY.test(c)) buyC.push(c); else if(RE_USE.test(c)) useC.push(c); else if(RE_Q.test(c)) qC.push(c); else buyC.push(c);
+  }
+  // "샀어"가 문장 끝에 한 번만 있으면 앞의 이름+개수도 산 것
+  buy=parseBuy(buyC.join(", "));
+  const foods=state.items.filter(i=>i.cat==="food"&&i.qty>0);
+  if(useC.length){ const r=estimateUse(useC.join(" "),foods); used=r.used.concat(homeUseLocal(useC.join(" ")));
+    if(r.found.length) comment=L(`${[...new Set(r.found)].join(", ")} — 가족 ${state.settings.people}명 기준 평균치예요.`,`${[...new Set(r.found)].join(", ")} — média para ${state.settings.people} pessoas.`); }
+  question=qC.join(" ");
+  // 2) AI가 있으면 더 똑똑하게 나누기
+  if(hasAI()){
+    const btn=$("bGo"); busy(btn,true,L("나누는 중","Separando"));
+    try{
+      const inv=state.items.filter(i=>nowQty(i)>0).map(i=>({name:i.name,qty:r1(nowQty(i)),unit:i.unit||"개",cat:i.cat}));
+      const j=await withTimeout(FB_AI(`너는 '집 도우미' 앱이야. 사용자가 집 살림에 대해 한 번에 말했어(한국어 또는 브라질 포르투갈어). 가족 ${state.settings.people}명, 화장실 ${state.settings.bathrooms}개. 망가=망고, 마멍=파파야, 휴지=화장지.
+지금 재고: ${JSON.stringify(inv)}
+사람마다 말이 달라: 샀어·삿어·구매·구입·사왔어·장봤어·주문했어 = 산 것 / 먹었어·해먹었어·썼어·썻어·사용·다 떨어졌어·버렸어 = 사용한 것. 맞춤법이 틀려도(ㅅ/ㅆ 등) 뜻으로 알아들어.
+말한 내용을 세 가지로 나눠:
+1) buy: 새로 산 물건. 규칙:
+${ITEM_RULES()}
+- 금액을 말했으면 price
+2) used: 사용한 것. 음식을 해먹었으면 그 음식에 이 가족이 보통 쓰는 재료 양(평균치)을, 과일 등을 먹었으면 그 개수를, 생활용품을 썼거나 '다 썼다'면 그 양(다 썼으면 남은 양 전부)을 재고에서 뺄 양으로. name은 재고 이름 그대로, 재고에 있는 것만, 0.5 단위, 재고 이하. why는 ${langName()}로 짧게.
+3) question: 궁금해서 물어본 문장(없으면 "")
+comment: 사용한 것에 대한 ${langName()} 한 줄 요약(없으면 "")
+JSON: {"buy":[],"used":[{"name":"","qty":1,"why":""}],"question":"","comment":""}
+사용자 말: """${text}"""`),30000);
+      const b=normItems(j.buy); 
+      const allItems=state.items.filter(i=>nowQty(i)>0);
+      const u=(j.used||[]).map(x=>({it:allItems.find(f=>f.name===x.name)||allItems.find(f=>x.name&&canon(f.name)===canon(x.name)),qty:+x.qty||0,why:x.why||""})).filter(x=>x.it&&x.qty>0).map(x=>({...x,qty:Math.min(x.qty,nowQty(x.it))}));
+      if(b.length||u.length||j.question){ buy=b; used=u; question=j.question||""; comment=j.comment||comment; }
+    }catch(e){ console.warn(e); }
+    busy(btn,false);
+  }
+  if(!buy.length&&!used.length&&!question){
+    if(useC.length){ showUsePreview([],text,L("이 음식은 아직 몰라서, 쓴 양을 직접 넣어 주세요.","Não conheço esse prato. Coloque o que usou.")); return; }
+    toast(L("잘 못 알아들었어요. 예) 오이 5개 샀어 / 카레 해먹었어 / 휴지 있니?","Não entendi. Ex.: comprei 5 pepinos / fiz curry / tem papel?")); return;
+  }
+  // 3) 차례로 보여주기: 산 것 → 쓴 것 → 대답
+  const steps=[];
+  if(buy.length) steps.push(next=>showBuyPreview(buy,L("🛒 산 것 — 이렇게 넣을까요?","🛒 Comprado — posso colocar assim?"),0,next));
+  if(used.length) steps.push(next=>showUsePreview(used,text,comment||L("사용한 것을 뺄게요.","Vou descontar o que usou."),next));
+  if(question) steps.push(()=>{ $("say").value=question; onAsk(); });
+  const run=i=>{ if(i<steps.length) steps[i](()=>run(i+1)); else $("say").value=""; };
+  run(0);
 }
 
 // ================= 요리 추천 =================
@@ -964,7 +1040,7 @@ async function onAsk(){
   if(!q){ if(APP){window.voiceMode="ask";Android.startVoice();} else toast(L("물어볼 것을 적어 주세요","Escreva a pergunta")); return; }
   let ans=answerLocal(q);
   if(!ans && hasAI()){
-    const btn=$("bAsk"); busy(btn,true,L("생각 중","Pensando"));
+    const btn=$("bGo"); busy(btn,true,L("생각 중","Pensando"));
     try{
       const mo=today().slice(0,7);
       const data={오늘:today(),가족:state.settings.people,
@@ -1076,7 +1152,7 @@ document.addEventListener("change",e=>{
   else { const m=state.shop.find(x=>"m:"+x.id===key); if(m) m.done=cb.checked; }
   save();render();
 });
-$("bBuy").onclick=onBuy; $("bAte").onclick=onAte; $("bAsk").onclick=onAsk;
+$("bGo").onclick=onSmart;
 $("shopAdd").onclick=()=>{const v=$("shopNew").value.trim();if(!v)return;
   v.split(/[,，]/).map(s=>s.trim()).filter(Boolean).forEach(n=>state.shop.push({id:uid(),name:n,done:false}));
   $("shopNew").value="";save();render();};
@@ -1094,8 +1170,9 @@ $("bReset").onclick=function(){
   if(!this.dataset.sure){this.dataset.sure="1";this.textContent=L("정말 다 지울까요? 한 번 더 누르세요","Apagar tudo? Toque de novo");return;}
   state=fresh();save();render();this.dataset.sure="";applyLang();toast(L("새로 시작해요","Recomeçando"));
 };
-$("mic").onclick=()=>{ window.voiceMode=""; if(APP) Android.startVoice(); else toast(L("핸드폰 앱에서 쓸 수 있어요. 키보드의 🎤도 돼요","Use o 🎤 do teclado")); };
-window.onVoice=text=>{ if(window.voiceMode==="ask"){window.voiceMode="";$("say").value=text;onAsk();return;} $("say").value=($("say").value.trim()?$("say").value.trim()+" ":"")+text; toast(L("들었어요: ","Ouvi: ")+text); };
+$("mic").onclick=()=>{ window.voiceMode=$("say").value.trim()?"":"smart"; if(APP) Android.startVoice(); else toast(L("핸드폰 앱에서 쓸 수 있어요. 키보드의 🎤도 돼요","Use o 🎤 do teclado")); };
+window.onVoice=text=>{ if(window.voiceMode==="ask"){window.voiceMode="";$("say").value=text;onAsk();return;}
+  if(window.voiceMode==="smart"){window.voiceMode="";$("say").value=text;onSmart();return;} $("say").value=($("say").value.trim()?$("say").value.trim()+" ":"")+text; toast(L("들었어요: ","Ouvi: ")+text); };
 
 applyLang();
 render();
