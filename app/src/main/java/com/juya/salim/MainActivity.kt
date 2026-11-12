@@ -373,6 +373,16 @@ class MainActivity : Activity() {
             }
         }
 
+        /** 할인 찾기·전단지 링크는 핸드폰 브라우저로 열기 */
+        @JavascriptInterface
+        fun openUrl(url: String) {
+            if (!url.startsWith("https://")) return
+            runOnUiThread {
+                try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                catch (e: Exception) { Toast.makeText(this@MainActivity, "브라우저를 열 수 없어요", Toast.LENGTH_SHORT).show() }
+            }
+        }
+
         @JavascriptInterface
         fun isApp(): Boolean = true
     }

@@ -100,6 +100,9 @@
   .emo button{font-size:26px;padding:6px 8px;background:#f6efe4;border-radius:12px;border:2px solid transparent}
   .emo button.on{border-color:var(--green);background:var(--green-soft)}
   .dline{padding:10px 2px;border-bottom:1px dashed var(--line);font-size:15px}
+  .kstep{font-size:15px;line-height:1.6;margin-top:6px}
+  .tip{font-size:13px;color:var(--sub);background:#f6efe4;border-radius:10px;padding:6px 10px;margin-top:6px}
+  .deal{background:none;padding:4px 6px;font-size:20px}
   .code{font-size:28px;font-weight:800;letter-spacing:3px;text-align:center;background:#fff;border:2px dashed var(--green);border-radius:14px;padding:10px;margin:8px 0}
 </style>
 </head>
@@ -124,6 +127,11 @@
       </div>
       <button class="btn-green full" id="bGo" style="margin-top:10px;font-size:19px;padding:15px">✅ <span data-pt="Enviar">입력하기</span></button>
       <p class="muted" style="margin:10px 0 0" data-pt="Fale tudo junto: o que comprou, o que usou ou cozinhou, ou uma pergunta. Eu separo geladeira, casa e lista sozinho.">산 것, 사용한 것(해먹은 음식), 궁금한 것을 한 번에 말하면 알아서 나눠서 냉장고·생활용품에 넣어 드려요.</p>
+    </div>
+
+    <div class="card" id="kCard">
+      <h2>🍳 <span data-pt="Receita coreana de hoje">오늘의 K-레시피</span></h2>
+      <div id="kRecipe"></div>
     </div>
 
     <div class="card">
@@ -178,6 +186,16 @@
         <button class="btn-ghost" id="shopClear" data-pt="Limpar marcados">체크한 것 지우기</button>
         <button class="btn-green" id="shopSend" data-pt="📤 Enviar no WhatsApp">📤 왓츠앱으로 보내기</button>
       </div>
+      <button class="btn-ghost full" id="shopFlyers" style="margin-top:10px" data-pt="📰 Ver encartes da semana (Tiendeo)">📰 이번 주 마트 전단지 보기 (Tiendeo)</button>
+      <p class="muted" style="margin:8px 0 0" data-pt="🏷️ ao lado de cada item procura ofertas dele.">각 물건 옆 🏷️를 누르면 그 물건 할인을 찾아 줘요.</p>
+    </div>
+    <div class="card" style="background:#fffbe8;border-color:#f2e2a6">
+      <b data-pt="💡 Na hora de pagar, peça &quot;CPF na nota&quot;!">💡 계산할 때 "CPF na nota" 꼭 말하세요!</b>
+      <p class="muted" style="margin:4px 0 0" data-pt="Com a Nota Fiscal Paulista você recebe de volta parte do ICMS e concorre a sorteios. E o QR do cupom ainda entra direto no app.">Nota Fiscal Paulista로 낸 세금(ICMS) 일부를 돌려받고 추첨에도 들어가요. 그 영수증 QR을 찍으면 앱에도 바로 들어와요.</p>
+    </div>
+    <div class="card">
+      <h2>📈 <span data-pt="Meus preços">내가 산 가격</span></h2>
+      <div id="prices"></div>
     </div>
     <div class="card">
       <h2>💰 <span data-pt="Gastos">장보기 가계부</span></h2>
@@ -282,7 +300,7 @@ window.dispatchEvent(new Event("fb-ready"));
 // ================= 언어 =================
 const LOCAL_KEY="salim_local";
 let local={lang:"ko",familyCode:"",deviceId:"",notifyHour:9,lastAt:0,
-  sound:"sound",volume:80,quietOn:true,quietStart:22,quietEnd:7,dnd:"respect",soundTitle:""};
+  sound:"sound",volume:80,recipeOn:true,quietOn:true,quietStart:22,quietEnd:7,dnd:"respect",soundTitle:""};
 try{Object.assign(local,JSON.parse(localStorage.getItem(LOCAL_KEY)||"{}"));}catch(e){}
 if(!local.deviceId) local.deviceId=Math.random().toString(36).slice(2,12);
 const saveLocal=()=>{try{localStorage.setItem(LOCAL_KEY,JSON.stringify(local));}catch(e){}};
@@ -353,6 +371,39 @@ const RECIPES = {
   "페이조아다":{"양파":1},"스트로가노프":{"양파":1,"버섯":3},"생선구이":{"레몬":0.5},"배추김치":{"배추":2,"무":0.5,"대파":1},
   "전":{"호박":0.5,"감자":1,"계란":2},"동그랑땡":{"두부":1,"양파":0.5,"당근":0.3,"계란":2},"야채볶음":{"양파":1,"당근":1,"호박":0.5},
   "브라질샐러드":{"상추":0.5,"토마토":2,"양파":0.5}};
+// 한식 만드는 법 (4인 기준 짧게) — ko / pt / 브라질 재료 팁
+const K_RECIPES={
+ "김치찌개":{pt:"Kimchi jjigae",ko:"냄비에 돼지고기·김치를 기름에 볶다가 물 3컵, 양파·두부 넣고 15분 끓이고 대파로 마무리.",pt_s:"Refogue carne de porco e kimchi, junte 3 xícaras de água, cebola e tofu, ferva 15 min e finalize com cebolinha.",tip:"김치·두부는 봉헤치·리베르다지 한인마트 / Kimchi e tofu nas lojas do Bom Retiro e Liberdade"},
+ "된장찌개":{pt:"Doenjang jjigae",ko:"물 3컵에 된장 2숟가락 풀고 감자·호박·양파 넣어 10분, 두부·고추·대파 넣고 5분 더.",pt_s:"Dissolva 2 colheres de doenjang em 3 xícaras de água, cozinhe batata, abobrinha e cebola 10 min, junte tofu, pimenta e cebolinha.",tip:"된장 대신 미소(missô)도 OK / Sem doenjang, use missô"},
+ "순두부":{pt:"Sundubu jjigae",ko:"고춧가루·기름으로 고추기름 내고 양파·호박 볶다가 물 2컵, 순두부 넣고 끓이다 계란 톡.",pt_s:"Faça óleo de pimenta, refogue cebola e abobrinha, junte 2 xícaras de água e tofu macio, finalize com ovo.",tip:"고춧가루 대신 pimenta calabresa 조금 / Use pimenta calabresa no lugar do gochugaru"},
+ "부대찌개":{pt:"Budae jjigae",ko:"냄비에 햄·소시지·양파·김치 담고 고추장 양념(고춧가루·간장·마늘) 올려 물 붓고 끓이다 라면사리.",pt_s:"Monte presunto, salsicha, cebola e kimchi na panela, tempero de gochujang, água, ferva e junte miojo.",tip:""},
+ "오이무침":{pt:"Salada de pepino coreana",ko:"오이 얇게 썰어 소금 10분 절이고 물기 짜서 고춧가루·식초·설탕·마늘·참기름에 무침.",pt_s:"Fatie o pepino, salgue 10 min, esprema e tempere com pimenta, vinagre, açúcar, alho e óleo de gergelim.",tip:"참기름 = óleo de gergelim (Liberdade) / Óleo de gergelim tostado"},
+ "오이냉국":{pt:"Sopa fria de pepino",ko:"오이 채 썰어 찬물 3컵·식초 3·설탕 2·소금·간장 조금 넣고 얼음 동동.",pt_s:"Pepino em tiras, 3 xícaras de água gelada, 3 colh. vinagre, 2 de açúcar, sal e um pouco de shoyu. Gelo por cima.",tip:"더운 날 최고 / Perfeito para dias quentes"},
+ "오이소박이":{pt:"Pepino recheado (kimchi)",ko:"오이 십자로 칼집 내고 소금물 절여, 부추·고춧가루·액젓·마늘 소를 채워 하루 익힘.",pt_s:"Corte o pepino em cruz, salmoure, recheie com cebolinha, pimenta, molho de peixe e alho, e deixe 1 dia.",tip:""},
+ "감자볶음":{pt:"Batata salteada",ko:"감자 채 썰어 물에 헹구고 기름에 볶다 양파·당근 넣고 소금·후추.",pt_s:"Batata em palitos finos, lave, refogue no óleo com cebola e cenoura, sal e pimenta.",tip:""},
+ "감자조림":{pt:"Batata glaceada (gamja jorim)",ko:"감자 깍둑 썰어 볶다가 간장 4·설탕 2·물 1컵 넣고 졸여 물엿·깨.",pt_s:"Batata em cubos, refogue, junte 4 colh. shoyu, 2 de açúcar e 1 xícara de água, reduza e finalize com mel e gergelim.",tip:"물엿 대신 꿀 / Mel no lugar do xarope"},
+ "감자전":{pt:"Panqueca de batata",ko:"감자 갈아서 물기 살짝 빼고 소금 조금, 기름 두른 팬에 얇게 부침.",pt_s:"Rale a batata, escorra um pouco, sal, e frite fino na frigideira com óleo.",tip:""},
+ "감자국":{pt:"Sopa de batata",ko:"멸치 육수에 감자·양파 넣고 끓여 국간장·마늘·대파로 간.",pt_s:"Caldo de anchova com batata e cebola, tempere com shoyu, alho e cebolinha.",tip:""},
+ "카레":{pt:"Curry japonês/coreano",ko:"고기·감자·당근·양파 볶다가 물 붓고 15분, 카레 가루 풀어 걸쭉하게.",pt_s:"Refogue carne, batata, cenoura e cebola, água, 15 min, e dissolva o curry até engrossar.",tip:"카레 블록은 한인·일본 마트 / Tablete de curry na Liberdade"},
+ "짜장":{pt:"Jjajang (molho de feijão preto)",ko:"고기·감자·양파·호박 볶다 춘장 볶아 넣고 물·전분물로 걸쭉하게.",pt_s:"Refogue carne, batata, cebola e abobrinha, junte chunjang frito, água e amido para engrossar.",tip:""},
+ "호박전":{pt:"Abobrinha empanada (jeon)",ko:"호박 동그랗게 썰어 소금 뿌리고 밀가루·계란물 입혀 부침.",pt_s:"Abobrinha em rodelas, sal, passe na farinha e no ovo e frite.",tip:"abobrinha italiana가 애호박이랑 비슷해요 / Abobrinha italiana funciona bem"},
+ "호박볶음":{pt:"Abobrinha refogada",ko:"호박·양파 썰어 새우젓 또는 소금으로 간하며 볶고 깨·참기름.",pt_s:"Refogue abobrinha e cebola com sal, finalize com gergelim e óleo de gergelim.",tip:""},
+ "호박죽":{pt:"Mingau de abóbora",ko:"단호박 쪄서 으깨고 물·찹쌀가루 넣어 저으며 끓이고 설탕·소금.",pt_s:"Cozinhe e amasse a abóbora, junte água e farinha de arroz, mexa até engrossar, açúcar e sal.",tip:"abóbora cabotiá가 단호박이에요 / Use abóbora cabotiá"},
+ "볶음밥":{pt:"Arroz frito",ko:"남은 밥에 양파·당근·호박 볶고 계란 스크램블 섞어 간장·참기름.",pt_s:"Refogue cebola, cenoura e abobrinha, junte arroz e ovos mexidos, shoyu e óleo de gergelim.",tip:"남은 밥 처리에 최고 / Ótimo para arroz que sobrou"},
+ "김밥":{pt:"Kimbap",ko:"김 위에 참기름 밥 펴고 계란·당근·오이·햄·단무지 올려 돌돌 말기.",pt_s:"Arroz temperado na alga, recheie com ovo, cenoura, pepino, presunto e rabanete em conserva e enrole.",tip:"김은 Liberdade·Bom Retiro / Alga nori nas lojas orientais"},
+ "계란말이":{pt:"Omelete enrolada",ko:"계란 풀어 당근·대파 다져 넣고 약불에 얇게 부어 돌돌 말기.",pt_s:"Bata os ovos com cenoura e cebolinha picadas, despeje fino em fogo baixo e enrole.",tip:""},
+ "계란찜":{pt:"Ovo cozido no vapor",ko:"계란 4개·물 1컵·소금 풀어 뚝배기에 약불로 저으며 익히고 뚜껑 덮어 2분.",pt_s:"4 ovos, 1 xícara de água e sal, cozinhe em fogo baixo mexendo e tampe por 2 min.",tip:""},
+ "잡채":{pt:"Japchae",ko:"당면 삶고 시금치·당근·양파·버섯 각각 볶아 간장·설탕·참기름에 버무림.",pt_s:"Cozinhe o macarrão de batata-doce, refogue espinafre, cenoura, cebola e cogumelo e misture com shoyu, açúcar e óleo de gergelim.",tip:""},
+ "불고기":{pt:"Bulgogi",ko:"소고기를 간장4·설탕2·마늘·참기름·배즙에 재워 양파·당근과 볶기.",pt_s:"Marine a carne em shoyu, açúcar, alho, óleo de gergelim e pera ralada e refogue com cebola e cenoura.",tip:"얇은 고기 = carne para sukiyaki/acém fatiado"},
+ "제육볶음":{pt:"Porco apimentado",ko:"돼지고기를 고추장·고춧가루·간장·설탕·마늘에 재워 양파·당근·대파와 볶기.",pt_s:"Marine porco em gochujang, pimenta, shoyu, açúcar e alho e refogue com cebola, cenoura e cebolinha.",tip:""},
+ "닭볶음탕":{pt:"Frango ensopado apimentado",ko:"닭·감자·당근·양파에 고추장·간장·고춧가루·마늘 양념과 물 넣고 25분 조림.",pt_s:"Frango, batata, cenoura e cebola com tempero de gochujang, shoyu, pimenta e alho, água, cozinhe 25 min.",tip:"sobrecoxa(닭다리살)로 하면 부드러워요"},
+ "떡볶이":{pt:"Tteokbokki",ko:"물 2컵에 고추장2·설탕1·간장1 풀고 떡·어묵·양파 넣어 졸이고 삶은 계란.",pt_s:"2 xícaras de água, 2 colh. gochujang, 1 açúcar, 1 shoyu, junte tteok, oden e cebola, reduza e sirva com ovo.",tip:""},
+ "라면":{pt:"Ramyeon",ko:"물 550ml 끓여 면·스프 넣고 4분, 계란·대파 넣어 마무리.",pt_s:"Ferva 550 ml de água, macarrão e tempero 4 min, finalize com ovo e cebolinha.",tip:""},
+ "비빔밥":{pt:"Bibimbap",ko:"밥 위에 오이·당근·호박·시금치 나물과 계란후라이 올리고 고추장·참기름 비빔.",pt_s:"Arroz com pepino, cenoura, abobrinha, espinafre e ovo frito por cima, misture com gochujang e óleo de gergelim.",tip:"남은 채소 다 넣으면 끝 / Use os legumes que sobraram"},
+ "배추김치":{pt:"Kimchi de acelga",ko:"배추 소금 절여 씻고, 고춧가루·마늘·생강·액젓·무채·파 양념을 발라 하루 실온 후 냉장.",pt_s:"Salgue a acelga, lave, passe tempero de pimenta, alho, gengibre, molho de peixe, nabo e cebolinha. 1 dia fora e depois geladeira.",tip:"acelga = 배추"},
+ "전":{pt:"Jeon de legumes",ko:"감자·호박 채 썰어 부침가루·물·계란 반죽에 섞어 얇게 부침.",pt_s:"Legumes em tiras, misture com farinha, água e ovo e frite fino.",tip:""},
+ "동그랑땡":{pt:"Bolinhos de tofu e carne",ko:"두부 으깨 다진 고기·양파·당근·계란 섞어 동그랗게 빚어 계란물 입혀 부침.",pt_s:"Amasse o tofu com carne moída, cebola, cenoura e ovo, modele, passe no ovo e frite.",tip:""}
+};
 const DISH_PT={"카레":"Curry","스튜":"Ensopado","수프":"Sopa","샐러드":"Salada","과일샐러드":"Salada de frutas","오믈렛":"Omelete","계란후라이":"Ovo frito","볶음밥":"Arroz frito",
   "스파게티":"Macarrão ao sugo","토마토소스":"Molho de tomate","감자튀김":"Batata frita","감자샐러드":"Maionese de batata","페이조아다":"Feijoada","스트로가노프":"Strogonoff",
   "망고주스":"Suco de manga","사과주스":"Suco de maçã","파파야스무디":"Vitamina de mamão","바나나우유":"Vitamina de banana","당근주스":"Suco de cenoura","야채볶음":"Legumes refogados",
@@ -362,7 +413,7 @@ const DISH_ALIAS = {"김치찌게":"김치찌개","된장국":"된장찌개","�
   "feijoada":"페이조아다","strogonoff":"스트로가노프","estrogonofe":"스트로가노프","vitamina de mamão":"파파야스무디","vitamina de banana":"바나나우유","vitamina":"바나나우유",
   "salada de frutas":"과일샐러드","salada":"샐러드","sopa":"수프","omelete":"오믈렛","ovo frito":"계란후라이","ovos fritos":"계란후라이","macarrão":"스파게티","batata frita":"감자튀김",
   "maionese":"감자샐러드","suco de manga":"망고주스","suco de maçã":"사과주스","suco de cenoura":"당근주스","ensopado":"스튜","curry":"카레","refogado":"야채볶음","purê":"감자조림"};
-const BLANK = {settings:{people:4,bathrooms:2,warnDays:3}, items:[], log:[], shop:[], shopChecked:{}, purchases:[], diary:{}};
+const BLANK = {settings:{people:4,bathrooms:2,warnDays:3}, items:[], log:[], shop:[], shopChecked:{}, purchases:[], diary:{}, usage:[]};
 
 // ================= 날짜·글자 =================
 const pad=n=>String(n).padStart(2,"0");
@@ -384,7 +435,7 @@ const langName=()=>L("한국어","포르투갈어(브라질)");
 // ================= 저장 =================
 const fresh=()=>JSON.parse(JSON.stringify(BLANK));
 let state=fresh();
-function loadInto(raw){ const s=JSON.parse(raw); const n=Object.assign(fresh(),s); n.settings=Object.assign(fresh().settings,s.settings||{}); n.shopChecked=n.shopChecked||{}; n.purchases=n.purchases||[]; n.diary=n.diary||{}; return n; }
+function loadInto(raw){ const s=JSON.parse(raw); const n=Object.assign(fresh(),s); n.settings=Object.assign(fresh().settings,s.settings||{}); n.shopChecked=n.shopChecked||{}; n.purchases=n.purchases||[]; n.diary=n.diary||{}; n.usage=n.usage||[]; return n; }
 try{ const raw = APP ? Android.loadState() : localStorage.getItem("salim"); if(raw) state=loadInto(raw); }catch(e){}
 
 let pushTimer=null;
@@ -435,6 +486,7 @@ function schedule(){
       if(isLow(it)) out.push({n:it.name,k:"low",d:today(),on:today()});
     }else{ const by=homeBuyBy(it); out.push({n:it.name,k:"buy",d:by,on:addDays(by,-w)}); }
   }
+  if(local.recipeOn!==false){ const k=kToday(); if(k){ const r=K_RECIPES[k.d]; out.push({n:local.lang==="pt"?r.pt:k.d,k:"recipe",d:k.hot.join(", "),on:today()}); } }
   return out;
 }
 function autoShop(){
@@ -445,6 +497,43 @@ function autoShop(){
     else if(isLow(it)) out.push({key:"a:"+it.id,name:it.name,why:L(`${r1(it.qty)}${unitOf(it)} 남음`,`resta ${r1(it.qty)}${unitOf(it)}`)});
   }
   return out;
+}
+
+// ================= 오늘의 K-레시피 =================
+let kShift=0;
+function kCandidates(){
+  const foods=state.items.filter(i=>i.cat==="food"&&i.qty>0);
+  const have={}, urg={};
+  foods.forEach(f=>{const c=canon(f.name);have[c]=(have[c]||0)+f.qty;const d=diff(today(),foodSpoil(f));urg[c]=Math.max(urg[c]||0,d<=0?12:Math.max(0,10-d));});
+  const day=Math.floor(dnum(today())/86400000);
+  const list=Object.keys(K_RECIPES).filter(d=>RECIPES[d]).map((d,i)=>{
+    const ing=Object.keys(RECIPES[d]); const got=ing.filter(k=>have[k]>0);
+    const score=got.length*3+got.reduce((a,k)=>a+(urg[k]||0),0)+((i*7+day)%5)*0.1;
+    const hot=got.filter(k=>(urg[k]||0)>=7);
+    return {d,got,hot,score};
+  });
+  const withIng=list.filter(x=>x.got.length).sort((a,b)=>b.score-a.score);
+  if(withIng.length) return withIng;
+  const keys=list.map(x=>x.d); return keys.map((d,i)=>list[(i+day)%keys.length]); // 재료가 없으면 날마다 돌아가며
+}
+function kToday(){ const c=kCandidates(); return c.length?c[kShift%c.length]:null; }
+function renderK(){
+  const box=$("kRecipe"); if(!box) return;
+  const k=kToday(); if(!k){box.innerHTML="";return;}
+  const r=K_RECIPES[k.d], name=local.lang==="pt"?r.pt:k.d;
+  const why=k.hot.length?L(`${k.hot.join(", ")}이(가) 곧 상해요 — 먼저 써요!`,`${k.hot.join(", ")} vai estragar logo — use primeiro!`)
+    :k.got.length?L(`집에 있는 재료: ${k.got.join(", ")}`,`Você tem: ${k.got.join(", ")}`):L("오늘의 추천 한식","Prato coreano do dia");
+  box.innerHTML=`<div style="font-size:20px;font-weight:800">${esc(name)}</div>
+    <div class="muted">${esc(why)}</div>
+    <div class="kstep">${esc(local.lang==="pt"?r.pt_s:r.ko)}</div>
+    ${r.tip?`<div class="tip">💡 ${esc(r.tip)}</div>`:""}
+    <div class="two"><button class="btn-ghost" id="kNext">🔄 ${L("다른 요리","Outro prato")}</button><button class="btn-orange" id="kCook">✅ ${L("이거 해먹었어요","Fiz este")}</button></div>`;
+  $("kNext").onclick=()=>{kShift++;renderK();};
+  $("kCook").onclick=()=>{
+    const foods=state.items.filter(x=>x.cat==="food"&&x.qty>0), scale=state.settings.people/4;
+    const used=Object.entries(RECIPES[k.d]).map(([ing,q])=>{const it=foods.find(f=>canon(f.name)===ing);return it?{it,qty:Math.min(it.qty,Math.round(q*scale*2)/2||0.5),why:name}:null;}).filter(Boolean);
+    showUsePreview(used,name,name);
+  };
 }
 
 // ================= 화면 =================
@@ -460,7 +549,8 @@ function render(){
   $("alerts").innerHTML = al.length? al.map(a=>`
     <div class="alert ${a.lv===2?"a-red":"a-orange"}"><div class="em">${emojiOf(a.it)}</div>
     <div class="grow"><b>${esc(a.t)}</b><span class="muted">${esc(a.d)}</span></div>
-    ${a.it.cat==="home"?`<button class="btn-ghost btn-sm" data-rebuy="${a.it.id}">${L("샀어요","Comprei")}</button>`:""}</div>`).join("")
+    ${a.it.cat==="home"?`<button class="btn-ghost btn-sm" data-rebuy="${a.it.id}">${L("샀어요","Comprei")}</button>`:
+      (a.lv===2?`<div style="display:flex;flex-direction:column;gap:4px"><button class="btn-ghost btn-sm" data-ok="${a.it.id}">${L("괜찮아요","Está bom")}</button><button class="btn-red btn-sm" data-trash="${a.it.id}">🗑️ ${L("버렸어요","Joguei")}</button></div>`:"")}</div>`).join("")
     : (state.items.length? `<div class="alert a-ok"><div class="em">😊</div><div><b>${L("지금은 걱정 없어요","Tudo certo por agora")}</b><span class="muted">${L(`떨어지기 ${s.warnDays}일 전, 매일 ${local.notifyHour}시에 핸드폰으로 알려드려요.`,`Aviso no celular ${s.warnDays} dia(s) antes, todo dia às ${local.notifyHour}h.`)}</span></div></div>`
       : `<div class="empty">${L("아직 등록된 물건이 없어요.<br>산 물건을 말하거나 <b>🧾 영수증 사진</b>을 찍어 보세요.","Nada cadastrado ainda.<br>Fale o que comprou ou tire uma <b>🧾 foto do cupom</b>.")}</div>`);
 
@@ -502,8 +592,9 @@ function render(){
   const allShop=[...auto.map(a=>({...a,done:!!sc[a.key]})),...state.shop.map(m=>({key:"m:"+m.id,name:m.name,why:L("직접 넣음","adicionado"),done:!!m.done}))];
   const notDone=allShop.filter(x=>!x.done).length;
   $("badge2").style.display=notDone?"block":"none"; $("badge2").textContent=notDone;
-  $("shopList").innerHTML = allShop.length? allShop.map(x=>`<label class="shop ${x.done?"done":""}"><input type="checkbox" data-shop="${x.key}" ${x.done?"checked":""}>
-    <span style="font-size:22px">${EMO[findKey(x.name,EMO)]||"🛒"}</span><div class="grow"><div class="nm">${esc(x.name)}</div><div class="muted">${esc(x.why)}</div></div></label>`).join("")
+  $("shopList").innerHTML = allShop.length? allShop.map(x=>{const lp=lastUnitPrice(x.name);return `<label class="shop ${x.done?"done":""}"><input type="checkbox" data-shop="${x.key}" ${x.done?"checked":""}>
+    <span style="font-size:22px">${EMO[findKey(x.name,EMO)]||"🛒"}</span><div class="grow"><div class="nm">${esc(x.name)}</div><div class="muted">${esc(x.why)}${lp?" · "+L("지난번","antes")+" "+brl(lp):""}</div></div>
+    <button class="deal" data-deal="${esc(x.name)}">🏷️</button></label>`;}).join("")
     : `<div class="empty">${L("살 게 없어요 👍","Nada para comprar 👍")}</div>`;
 
   renderMoney();
@@ -511,6 +602,8 @@ function render(){
     : `<div class="empty">${L("기록이 여기 쌓여요.","Os registros aparecem aqui.")}</div>`;
   renderFamily();
   renderAlarm();
+  renderK();
+  renderPrices();
   if(!document.activeElement||document.activeElement.id!=="diaryText") renderDiary();
 }
 const addLog=(type,text)=>{state.log.unshift({date:today(),type,text});state.log=state.log.slice(0,60);};
@@ -532,11 +625,50 @@ function renderMoney(){
     ${prev>0?`<div class="muted">${L("지난달","mês passado")} ${brl(prev)} · ${tot>=prev?"▲":"▼"} ${brl(Math.abs(tot-prev))}</div>`:""}
     <div class="split"><i style="width:${tot?100*food/tot:0}%;background:var(--green)"></i><i style="width:${tot?100*home/tot:0}%;background:var(--blue)"></i></div>
     <div class="muted"><span style="color:var(--green)">●</span> ${L("식재료","Alimentos")} ${brl(food)} &nbsp; <span style="color:var(--blue)">●</span> ${L("생활용품","Casa")} ${brl(home)}</div>
+    ${(()=>{const u=useSums(moneyMonth); if(!u.ate&&!u.waste) return `<div class="tip" style="margin-top:10px">💚 ${L("금액을 넣고 산 음식을 다 먹으면 '지킨 돈', 버리면 '버린 돈'으로 여기 모여요.","Comida com preço que você usa vira 'aproveitado'; o que joga fora vira 'desperdício'.")}</div>`;
+      const pct=Math.round(100*u.ate/(u.ate+u.waste||1));
+      return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+        <div style="background:var(--green-soft);border-radius:14px;padding:10px"><div class="muted">🍽️ ${L("다 먹은 음식","Aproveitado")}</div><b style="font-size:20px;color:var(--green)">${brl(u.ate)}</b></div>
+        <div style="background:var(--red-soft);border-radius:14px;padding:10px"><div class="muted">🗑️ ${L("버린 음식","Desperdiçado")}</div><b style="font-size:20px;color:var(--red)">${brl(u.waste)}</b></div></div>
+        <div class="muted" style="margin-top:6px">${L(`알뜰 점수 ${pct}점 — 산 음식의 ${pct}%를 다 먹었어요`,`Nota de economia ${pct} — você aproveitou ${pct}% da comida`)} ${pct>=90?"🏆":pct>=70?"👍":"💪"}</div>`;})()}
     <div class="bars">${months.map(mo=>`<div class="${mo===moneyMonth?"cur":""}" data-month="${mo}"><i style="height:${Math.round(90*sum(mo)/max)}%"></i>${monthName(mo)}</div>`).join("")}</div>
     <div style="margin-top:10px">${list.length? list.slice(0,30).map(p=>`<div class="item" data-purchase="${p.id}" style="padding:8px 2px"><div class="em" style="font-size:22px;width:30px">${EMO[findKey(p.name,EMO)]||(p.cat==="food"?"🥗":"📦")}</div>
       <div class="grow"><div class="nm" style="font-weight:600">${esc(p.name)}</div><div class="meta">${md(p.date)} · ${r1(p.qty)}${unitTxt(p.unit)}</div></div><div style="font-weight:700">${brl(p.price)}</div></div>`).join("")
       : `<div class="empty">${L("살 때 금액을 넣거나 영수증 사진을 찍으면 여기 모여요.","Coloque o preço ao comprar ou tire foto do cupom.")}</div>`}</div>`;
 }
+
+// ================= 다 먹은 돈 / 버린 돈 =================
+function recordUse(it,q,waste){ const v=lastUnitPrice(it.name)*q; state.usage.push({date:today(),name:it.name,qty:q,value:Math.round(v*100)/100,waste:!!waste}); state.usage=state.usage.slice(-2000); }
+function useSums(mo){ const U=state.usage.filter(u=>u.date.slice(0,7)===mo); const ate=U.filter(u=>!u.waste).reduce((a,u)=>a+u.value,0), waste=U.filter(u=>u.waste).reduce((a,u)=>a+u.value,0);
+  return {ate,waste,nAte:U.filter(u=>!u.waste).length,nWaste:U.filter(u=>u.waste).length}; }
+function throwAway(it){ const q=it.qty; recordUse(it,q,true); it.qty=0; addLog("ate",L(`${it.name} ${r1(q)}${unitOf(it)} 버림`,`${it.name} ${r1(q)} jogado fora`)); save(); render(); toast(L("버린 것으로 적었어요. 다음엔 꼭 먹어요 💪","Anotado. Da próxima vez a gente aproveita 💪")); }
+function stillOk(it){ it.shelf=(it.shelf||7)+3; save(); render(); toast(L("3일 더 지켜볼게요","Mais 3 dias")); }
+
+// ================= 내가 산 가격 =================
+const unitPrice=p=>(+p.price>0&&+p.qty>0)?(+p.price)/(+p.qty):0;
+function priceHist(name){ const c=canon(name); return state.purchases.filter(p=>unitPrice(p)>0&&canon(p.name)===c).sort((a,b)=>a.date.localeCompare(b.date)); }
+function lastUnitPrice(name){ const h=priceHist(name); return h.length?unitPrice(h[h.length-1]):0; }
+function renderPrices(){
+  const box=$("prices"); if(!box) return;
+  const groups={}; state.purchases.filter(p=>unitPrice(p)>0).forEach(p=>{const c=canon(p.name);(groups[c]=groups[c]||[]).push(p);});
+  const rows=Object.entries(groups).map(([c,arr])=>{arr.sort((a,b)=>a.date.localeCompare(b.date));const last=arr[arr.length-1],prev=arr.length>1?arr[arr.length-2]:null;
+    const cheapest=arr.reduce((m,p)=>unitPrice(p)<unitPrice(m)?p:m,arr[0]);return {c,last,prev,cheapest,n:arr.length};})
+    .sort((a,b)=>b.last.date.localeCompare(a.last.date)).slice(0,15);
+  box.innerHTML=rows.length?rows.map(r=>{
+    const u=unitPrice(r.last), pu=r.prev?unitPrice(r.prev):0, ch=pu?((u-pu)/pu*100):0;
+    const tag=!pu?"":Math.abs(ch)<3?`<span class="pill p-green">${L("그대로","igual")}</span>`:ch>0?`<span class="pill p-red">▲ ${Math.round(ch)}%</span>`:`<span class="pill p-green">▼ ${Math.round(-ch)}%</span>`;
+    const store=r.cheapest.store&&r.n>1?` · ${L("제일 쌌던 곳","mais barato em")}: ${esc(r.cheapest.store)} ${brl(unitPrice(r.cheapest))}`:"";
+    return `<div class="item" style="padding:9px 2px"><div class="em" style="font-size:22px;width:30px">${EMO[findKey(r.last.name,EMO)]||"🛒"}</div>
+      <div class="grow"><div class="nm" style="font-weight:600">${esc(r.last.name)}${tag}</div><div class="meta">${L("1"+unitTxt(r.last.unit)+"에","por "+unitTxt(r.last.unit))} ${brl(u)}${pu?` (${L("지난번","antes")} ${brl(pu)})`:""}${store}</div></div>
+      <button class="deal" data-deal="${esc(r.last.name)}">🏷️</button></div>`;}).join("")
+    :`<div class="empty">${L("금액을 넣고 사거나 영수증 QR을 찍으면, 물건마다 가격이 올랐는지 내렸는지 보여 드려요.","Ao salvar compras com preço (ou QR do cupom), mostro se cada item subiu ou baixou.")}</div>`;
+}
+// 포르투갈어 이름 (할인 검색용)
+function ptName(name){ if(/^[\x00-\x7fÀ-ÿ\s-]+$/.test(name)) return name; const c=canon(name);
+  const k=Object.entries(ALIAS).filter(([a,v])=>v===c&&/^[a-zà-ÿ\s-]+$/i.test(a)).map(([a])=>a).sort((a,b)=>a.length-b.length)[0]; return k||name; }
+function openUrl(u){ if(APP) Android.openUrl(u); else window.open(u,"_blank"); }
+document.addEventListener("click",e=>{ const d=e.target.closest("[data-deal]"); if(!d) return; e.preventDefault(); e.stopPropagation();
+  openUrl("https://www.google.com/search?q="+encodeURIComponent("oferta "+ptName(d.dataset.deal)+" supermercado encarte São Paulo")); },true);
 
 // ================= 탭 =================
 function showTab(id){
@@ -547,7 +679,7 @@ function showTab(id){
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
 
 // ================= 토스트/모달 =================
-let tt;function toast(m){const t=$("toast");t.textContent=m;t.classList.add("on");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("on"),2800);}
+let tt;function toast(m,ms){const t=$("toast");t.textContent=m;t.classList.add("on");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("on"),ms||2800);}
 const mbg=$("mbg"),modal=$("modal");
 function openModal(html){modal.innerHTML=html;mbg.classList.add("on");modal.scrollTop=0;}
 function closeModal(){mbg.classList.remove("on");}
@@ -633,7 +765,7 @@ JSON: {"items":[{"name":"오이","qty":5,"unit":"개","cat":"food","loc":"fridge
   showBuyPreview(items, L("🛒 이렇게 넣을까요?","🛒 Posso colocar assim?"));
 }
 
-function showBuyPreview(items,title,total,after){
+function showBuyPreview(items,title,total,after,store){
   openModal(`<h3>${title}</h3><p class="muted">${L("개수·종류·금액이 다르면 고쳐 주세요. 금액은 안 넣어도 돼요.","Corrija quantidade, tipo ou preço se precisar. O preço é opcional.")}</p>
   ${total?`<p class="muted">${L("영수증 합계","Total do cupom")}: <b>${brl(total)}</b></p>`:""}
   ${items.map((it,i)=>`<div class="prow" style="flex-wrap:wrap"><input type="checkbox" checked data-i="${i}">
@@ -652,7 +784,7 @@ function showBuyPreview(items,title,total,after){
   <div class="two"><button class="btn-ghost" id="mCancel">${L("취소","Cancelar")}</button><button class="btn-green" id="mOk">${L("넣기","Salvar")}</button></div>`);
   $("mCancel").onclick=()=>{closeModal();if(after)after();};
   $("mOk").onclick=()=>{
-    const t=today(), names=[];
+    const t=today(), names=[], cmp=[];
     items.forEach((it,i)=>{
       if(!modal.querySelector(`[data-i="${i}"]`).checked) return;
       const q=+modal.querySelector(`[data-q="${i}"]`).value||0; if(q<=0) return;
@@ -674,12 +806,14 @@ function showBuyPreview(items,title,total,after){
         state.items.push(n);
       }
       state.shop.forEach(s=>{if(canon(s.name)===canon(name))s.done=true;});
-      state.purchases.push({id:uid(),date:t,name,cat,qty:q,unit:it.unit||"개",price});
+      if(price>0){ const before=lastUnitPrice(name), now=price/q; if(before>0){ const ch=(now-before)/before*100;
+        if(Math.abs(ch)>=5) cmp.push(ch>0?L(`${name} 지난번보다 ${Math.round(ch)}% 비싸요`,`${name} ${Math.round(ch)}% mais caro`):L(`${name} 지난번보다 ${Math.round(-ch)}% 싸요 👍`,`${name} ${Math.round(-ch)}% mais barato 👍`)); } }
+      state.purchases.push({id:uid(),date:t,name,cat,qty:q,unit:it.unit||"개",price,store:store||""});
       names.push(`${name} ${q}${unitTxt(it.unit)}${price?" "+brl(price):""}`);
     });
     state.purchases=state.purchases.slice(-1500);
     if(names.length) addLog("buy",names.join(", "));
-    save();render();closeModal();$("say").value="";toast(L("넣었어요! 👍","Salvo! 👍"));
+    save();render();closeModal();$("say").value="";toast(cmp.length?"📈 "+cmp.slice(0,2).join(" · "):L("넣었어요! 👍","Salvo! 👍"),cmp.length?5000:2800);
     if(after) after();
   };
 }
@@ -709,7 +843,8 @@ function parseNfce(html){
     return {desc:name.trim(),qty,unit,price};
   }).filter(x=>x.desc);
   const totalEl=doc.querySelector(".totalNumb.txtMax")||[...doc.querySelectorAll(".totalNumb")].pop();
-  return {items,total:totalEl?num(totalEl.textContent):0,text:(doc.body?doc.body.innerText||doc.body.textContent:"").replace(/\s+/g," ").slice(0,15000)};
+  const st=(doc.querySelector("#u20")||doc.querySelector(".txtTopo")||{}).textContent||"";
+  return {store:st.replace(/\s+/g," ").trim().slice(0,40),items,total:totalEl?num(totalEl.textContent):0,text:(doc.body?doc.body.innerText||doc.body.textContent:"").replace(/\s+/g," ").slice(0,15000)};
 }
 window.onNfceHtml=async html=>{
   openModal(`<h3>📱 ${L("영수증 정리 중…","Organizando o cupom…")}</h3><div class="empty"><span class="spin dark"></span></div>`);
@@ -734,7 +869,7 @@ JSON: {"items":[...],"total":${total||0}}`),40000);
       const it=makeNew(n.charAt(0).toUpperCase()+n.slice(1),x.qty||1,kg?"kg":"");it.price=x.price;return it;});
   }
   if(!items.length){closeModal();toast(L("영수증 정보를 못 읽었어요. 사진으로 해 주세요","Não consegui ler. Use a foto do cupom"));return;}
-  showBuyPreview(items,L("📱 QR 영수증에서 가져왔어요","📱 Itens do QR code"),total);
+  showBuyPreview(items,L("📱 QR 영수증에서 가져왔어요","📱 Itens do QR code")+(p.store?` — ${esc(p.store)}`:""),total,null,p.store);
 };
 window.onNfceError=msg=>{closeModal();toast(msg==="notnfce"?L("영수증 QR 코드가 아니에요","Não é QR de cupom fiscal"):L("세무서 페이지를 못 열었어요. 인터넷을 확인하거나 사진으로 해 주세요","Não abriu a página da SEFAZ. Use a foto"));};
 window.onNfceLoading=()=>openModal(`<h3>📱 ${L("세무서에서 가져오는 중…","Buscando na SEFAZ…")}</h3><div class="empty"><span class="spin dark"></span></div>`);
@@ -832,6 +967,7 @@ function showUsePreview(used,text,comment,after){
     const parts=[];
     rows.forEach((r,i)=>{const have=nowQty(r.it);const q=Math.min(have,Math.max(0,+modal.querySelector(`[data-u="${i}"]`).value||0));if(q>0){
       if(r.it.cat==="home"){r.it.qty=r1(have-q);r.it.bought=today();} else r.it.qty=r1(r.it.qty-q);
+      if(r.it.cat==="food") recordUse(r.it,q,/버렸|버림|버렷|상해서|상했|joguei|estragou|estragado/i.test(text));
       parts.push(`${r.it.name} −${r1(q)}`);}});
     addLog("ate",text+(parts.length?` (${parts.join(", ")})`:""));
     save();render();closeModal();$("say").value="";toast(L("재고에서 뺐어요 🍽️","Descontado 🍽️"));
@@ -1043,6 +1179,8 @@ function renderAlarm(){
       <button class="btn-ghost btn-sm" id="aPick">${L("바꾸기","Trocar")}</button><button class="btn-ghost btn-sm" id="aPlay">▶</button></div>
     <label class="f">${L("볼륨","Volume")} <b id="aVolTxt">${local.volume}%</b></label>
     <input type="range" min="10" max="100" step="5" id="aVol" value="${local.volume}" class="full" style="accent-color:var(--green);border:0;padding:0">`:""}
+    <label class="f">${L("아침 알림에 '오늘의 K-레시피' 같이 보내기","Receita coreana no aviso da manhã")}</label>
+    ${seg("recipeOn",[["true",L("켜기","Ligado")],["false",L("끄기","Desligado")]])}
     <label class="f">${L("방해 금지 시간 (이 시간엔 조용히)","Horário silencioso")}</label>
     ${seg("quietOn",[["true",L("켜기","Ligado")],["false",L("끄기","Desligado")]])}
     ${local.quietOn?`<div class="row" style="margin-top:8px;justify-content:center">
@@ -1058,7 +1196,7 @@ function renderAlarm(){
 }
 window.onSoundPicked=title=>{local.soundTitle=title;saveLocal();renderAlarm();toast("🎵 "+title);};
 document.addEventListener("click",e=>{
-  const a=e.target.closest("[data-al]"); if(a){const [k,v]=a.dataset.al.split(":");local[k]=v==="true"?true:v==="false"?false:v;saveLocal();pushAlarm();renderAlarm();return;}
+  const a=e.target.closest("[data-al]"); if(a){const [k,v]=a.dataset.al.split(":");local[k]=v==="true"?true:v==="false"?false:v;saveLocal();pushAlarm();save(true);renderAlarm();return;}
   const q=e.target.closest("[data-q]"); if(q){const [k,d]=q.dataset.q.split(":");local[k]=((local[k]+(+d))%24+24)%24;saveLocal();pushAlarm();renderAlarm();}
 });
 
@@ -1232,6 +1370,8 @@ document.addEventListener("click",e=>{
   const ed=e.target.closest("[data-edit]"); if(ed){editItem(state.items.find(x=>x.id===ed.dataset.edit));return;}
   const ad=e.target.closest("[data-add]"); if(ad){editItem(null,ad.dataset.add);return;}
   const rb=e.target.closest("[data-rebuy]"); if(rb){rebuy(state.items.find(x=>x.id===rb.dataset.rebuy));return;}
+  const tr=e.target.closest("[data-trash]"); if(tr){const it=state.items.find(x=>x.id===tr.dataset.trash);if(it)throwAway(it);return;}
+  const okb=e.target.closest("[data-ok]"); if(okb){const it=state.items.find(x=>x.id===okb.dataset.ok);if(it)stillOk(it);return;}
   const ck=e.target.closest("[data-cook]"); if(ck){cookSuggestion(+ck.dataset.cook);return;}
   const mo=e.target.closest("[data-month]"); if(mo){moneyMonth=mo.dataset.month;renderMoney();return;}
   const pu=e.target.closest("[data-purchase]"); if(pu){const p=state.purchases.find(x=>x.id===pu.dataset.purchase);if(p)purchaseMenu(p);return;}
@@ -1254,6 +1394,7 @@ $("shopAdd").onclick=()=>{const v=$("shopNew").value.trim();if(!v)return;
   v.split(/[,，]/).map(s=>s.trim()).filter(Boolean).forEach(n=>state.shop.push({id:uid(),name:n,done:false}));
   $("shopNew").value="";save();render();};
 $("shopNew").onkeydown=e=>{if(e.key==="Enter")$("shopAdd").click();};
+$("shopFlyers").onclick=()=>openUrl("https://www.tiendeo.com.br/");
 $("shopClear").onclick=()=>{state.shop=state.shop.filter(x=>!x.done);save();render();toast(L("정리했어요","Pronto"));};
 $("shopSend").onclick=()=>{
   const sc=state.shopChecked;

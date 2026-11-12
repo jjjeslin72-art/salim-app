@@ -73,6 +73,7 @@ object Notifier {
         if (raw.isBlank()) return emptyList()
         val today = LocalDate.now()
         val pt = pt(c)
+        var recipe: String? = null
         val urgent = mutableListOf<String>()
         val soon = mutableListOf<String>()
         try {
@@ -92,11 +93,13 @@ object Notifier {
                         d == 0L -> urgent.add(if (pt) "🥬 $name — consuma hoje" else "🥬 $name — 오늘까지 드세요")
                         else -> soon.add(if (pt) "🥬 $name — consuma em $d dia(s)" else "🥬 $name — ${d}일 안에 드세요")
                     }
+                    "recipe" -> recipe = if (pt) "🍳 Receita coreana de hoje: $name" + (if (o.optString("d").isNotBlank()) " (use ${o.optString("d")})" else "")
+                                  else "🍳 오늘의 K-레시피: $name" + (if (o.optString("d").isNotBlank()) " (${o.optString("d")} 먼저)" else "")
                     "low" -> soon.add(if (pt) "🛒 $name — está acabando" else "🛒 $name — 거의 다 먹었어요")
                 }
             }
         } catch (e: Exception) { }
-        return urgent + soon
+        return urgent + soon + listOfNotNull(recipe)
     }
 
     /** 알림 띄우기. 띄웠으면 true */
@@ -115,7 +118,11 @@ object Notifier {
             .setSmallIcon(R.drawable.ic_stat)
             .setColor(0xFF3F8F5A.toInt())
             .setContentTitle(if (force) (if (pt) "Aviso (teste)" else "집 도우미 (시험)")
-                else (if (pt) "Hoje: ${lines.size} item(ns) para ver" else "오늘 챙길 것 ${lines.size}개"))
+                else {
+                    val n = lines.count { !it.startsWith("🍳") }
+                    if (n == 0) (if (pt) "🍳 Receita coreana de hoje" else "🍳 오늘의 K-레시피")
+                    else (if (pt) "Hoje: $n item(ns) para ver" else "오늘 챙길 것 ${n}개")
+                })
             .setContentText(lines.first())
             .setStyle(style)
             .setContentIntent(open)
