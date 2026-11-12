@@ -120,10 +120,10 @@
       </div>
       <div class="two">
         <button class="btn-green" id="bBuy">🛒 <span data-pt="Comprei">샀어요</span></button>
-        <button class="btn-orange" id="bAte">🍳 <span data-pt="Cozinhei">해먹었어요</span></button>
+        <button class="btn-orange" id="bAte">🍽️ <span data-pt="Usei">사용했어요</span></button>
       </div>
       <button class="btn-blue full" id="bAsk" style="margin-top:10px">❓ <span data-pt="Perguntar (ex.: quantas batatas-doces restam?)">물어보기 (예: 고구마 몇 개 남았어?)</span></button>
-      <p class="muted" style="margin:10px 0 0" data-pt="Em 'Cozinhei', calculo a média dos ingredientes usados para o tamanho da sua família.">'해먹었어요'를 누르면 음식에 보통 들어가는 재료를 가족 수에 맞춰 평균치로 빼 드려요.</p>
+      <p class="muted" style="margin:10px 0 0" data-pt="Em 'Usei', diga o que cozinhou ou usou e eu desconto a média dos ingredientes para a sua família.">'사용했어요'를 누르면 해먹은 음식에 보통 들어가는 재료를 가족 수에 맞춰 평균치로 빼 드려요.</p>
     </div>
 
     <div class="card">
@@ -738,7 +738,7 @@ function estimateUse(text, foods){
 }
 const dishName=d=>local.lang==="pt"?(DISH_PT[d]||d):d;
 async function onAte(){
-  const text=$("say").value.trim(); if(!text){toast(L("해먹은 음식을 먼저 말하거나 적어 주세요","Fale ou escreva o que cozinhou"));return;}
+  const text=$("say").value.trim(); if(!text){toast(L("사용한 것(해먹은 음식)을 먼저 말하거나 적어 주세요","Fale ou escreva o que usou ou cozinhou"));return;}
   const foods=state.items.filter(i=>i.cat==="food"&&i.qty>0);
   if(!foods.length){toast(L("등록된 식재료가 없어요. 먼저 '샀어요'로 넣어 주세요","Nenhum alimento cadastrado. Use 'Comprei' primeiro"));return;}
   let {used,found}=estimateUse(text,foods);
