@@ -24,6 +24,11 @@ import androidx.webkit.WebViewAssetLoader
 import java.io.ByteArrayOutputStream
 import android.speech.tts.TextToSpeech
 import java.util.Locale
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import java.net.HttpURLConnection
+import java.net.URL
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -154,6 +159,32 @@ class MainActivity : Activity() {
         }
     }
 
+    /** 세무서(SEFAZ) 영수증 페이지 열어서 글자 가져오기 */
+    private fun fetchPage(start: String): String {
+        var url = start
+        repeat(6) {
+            val c = URL(url).openConnection() as HttpURLConnection
+            c.instanceFollowRedirects = false
+            c.connectTimeout = 15000; c.readTimeout = 20000
+            c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36")
+            c.setRequestProperty("Accept-Language", "pt-BR,pt;q=0.9")
+            val code = c.responseCode
+            if (code in 300..399) {
+                val loc = c.getHeaderField("Location") ?: throw Exception("redirect")
+                url = URL(URL(url), loc).toString(); c.disconnect(); return@repeat
+            }
+            val bytes = (if (code >= 400) c.errorStream else c.inputStream)?.use { it.readBytes() } ?: ByteArray(0)
+            val ct = (c.contentType ?: "").lowercase()
+            c.disconnect()
+            if (code >= 400) throw Exception("http $code")
+            val cs = Regex("charset=([\\w-]+)").find(ct)?.groupValues?.get(1)
+                ?: Regex("charset=[\"']?([\\w-]+)", RegexOption.IGNORE_CASE).find(String(bytes, Charsets.ISO_8859_1).take(3000))?.groupValues?.get(1)
+                ?: "UTF-8"
+            return try { String(bytes, charset(cs)) } catch (e: Exception) { String(bytes, Charsets.UTF_8) }
+        }
+        throw Exception("too many redirects")
+    }
+
     /** 사진을 1600px 이하 JPEG로 줄이고 바로 세워서 base64로 */
     private fun encodePhoto(uri: Uri): String {
         val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -212,6 +243,33 @@ class MainActivity : Activity() {
                 } catch (e: Exception) {
                     Toast.makeText(this@MainActivity, "이 핸드폰에서는 음성 입력을 쓸 수 없어요", Toast.LENGTH_LONG).show()
                 }
+            }
+        }
+
+        /** 영수증 QR 코드 찍기 → 세무서 페이지 가져오기 */
+        @JavascriptInterface
+        fun scanQr() {
+            runOnUiThread {
+                val opts = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
+                GmsBarcodeScanning.getClient(this@MainActivity, opts).startScan()
+                    .addOnSuccessListener { b ->
+                        val raw = (b.rawValue ?: "").trim()
+                        val ok = raw.startsWith("http", true) &&
+                            Regex("(fazenda|sefaz|\\.gov\\.br|nfce)", RegexOption.IGNORE_CASE).containsMatchIn(raw)
+                        if (!ok) { web.evaluateJavascript("window.onNfceError&&window.onNfceError('notnfce')", null); return@addOnSuccessListener }
+                        web.evaluateJavascript("window.onNfceLoading&&window.onNfceLoading()", null)
+                        Thread {
+                            val html = try { fetchPage(raw.replace("http://", "https://")) } catch (e: Exception) {
+                                try { fetchPage(raw) } catch (e2: Exception) { null } }
+                            runOnUiThread {
+                                if (html == null) web.evaluateJavascript("window.onNfceError&&window.onNfceError('net')", null)
+                                else web.evaluateJavascript("window.onNfceHtml&&window.onNfceHtml(${JSONObject.quote(html)})", null)
+                            }
+                        }.start()
+                    }
+                    .addOnFailureListener {
+                        Toast.makeText(this@MainActivity, "QR 스캐너를 준비 중이에요. 잠시 후 다시 눌러 주세요 / Tente de novo", Toast.LENGTH_LONG).show()
+                    }
             }
         }
 

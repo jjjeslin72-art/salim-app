@@ -37,6 +37,9 @@
             </intent-filter>
         </activity>
 
+        <!-- QR 스캐너를 앱 설치할 때 미리 받아 두기 -->
+        <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="barcode_ui" />
+
         <!-- 매일 정한 시간에 알림 확인 -->
         <receiver android:name=".AlarmReceiver" android:exported="false" />
 

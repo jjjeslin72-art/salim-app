@@ -96,6 +96,10 @@
   .split{display:flex;height:12px;border-radius:9px;overflow:hidden;margin:10px 0 4px;background:#f1e8da}
   .dish{border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0;background:#fffdf9}
   .dish b{font-size:17px}
+  .emo{display:flex;gap:6px;flex-wrap:wrap}
+  .emo button{font-size:26px;padding:6px 8px;background:#f6efe4;border-radius:12px;border:2px solid transparent}
+  .emo button.on{border-color:var(--green);background:var(--green-soft)}
+  .dline{padding:10px 2px;border-bottom:1px dashed var(--line);font-size:15px}
   .code{font-size:28px;font-weight:800;letter-spacing:3px;text-align:center;background:#fff;border:2px dashed var(--green);border-radius:14px;padding:10px;margin:8px 0}
 </style>
 </head>
@@ -132,6 +136,11 @@
     <div class="card">
       <h2>📝 <span data-pt="Últimos registros">최근 기록</span></h2>
       <div id="log"></div>
+    </div>
+
+    <div class="card" id="diaryCard">
+      <h2>📔 <span data-pt="Diário de hoje">오늘의 일기</span></h2>
+      <div id="diary"></div>
     </div>
   </section>
 
@@ -353,7 +362,7 @@ const DISH_ALIAS = {"김치찌게":"김치찌개","된장국":"된장찌개","�
   "feijoada":"페이조아다","strogonoff":"스트로가노프","estrogonofe":"스트로가노프","vitamina de mamão":"파파야스무디","vitamina de banana":"바나나우유","vitamina":"바나나우유",
   "salada de frutas":"과일샐러드","salada":"샐러드","sopa":"수프","omelete":"오믈렛","ovo frito":"계란후라이","ovos fritos":"계란후라이","macarrão":"스파게티","batata frita":"감자튀김",
   "maionese":"감자샐러드","suco de manga":"망고주스","suco de maçã":"사과주스","suco de cenoura":"당근주스","ensopado":"스튜","curry":"카레","refogado":"야채볶음","purê":"감자조림"};
-const BLANK = {settings:{people:4,bathrooms:2,warnDays:3}, items:[], log:[], shop:[], shopChecked:{}, purchases:[]};
+const BLANK = {settings:{people:4,bathrooms:2,warnDays:3}, items:[], log:[], shop:[], shopChecked:{}, purchases:[], diary:{}};
 
 // ================= 날짜·글자 =================
 const pad=n=>String(n).padStart(2,"0");
@@ -375,7 +384,7 @@ const langName=()=>L("한국어","포르투갈어(브라질)");
 // ================= 저장 =================
 const fresh=()=>JSON.parse(JSON.stringify(BLANK));
 let state=fresh();
-function loadInto(raw){ const s=JSON.parse(raw); const n=Object.assign(fresh(),s); n.settings=Object.assign(fresh().settings,s.settings||{}); n.shopChecked=n.shopChecked||{}; n.purchases=n.purchases||[]; return n; }
+function loadInto(raw){ const s=JSON.parse(raw); const n=Object.assign(fresh(),s); n.settings=Object.assign(fresh().settings,s.settings||{}); n.shopChecked=n.shopChecked||{}; n.purchases=n.purchases||[]; n.diary=n.diary||{}; return n; }
 try{ const raw = APP ? Android.loadState() : localStorage.getItem("salim"); if(raw) state=loadInto(raw); }catch(e){}
 
 let pushTimer=null;
@@ -502,6 +511,7 @@ function render(){
     : `<div class="empty">${L("기록이 여기 쌓여요.","Os registros aparecem aqui.")}</div>`;
   renderFamily();
   renderAlarm();
+  if(!document.activeElement||document.activeElement.id!=="diaryText") renderDiary();
 }
 const addLog=(type,text)=>{state.log.unshift({date:today(),type,text});state.log=state.log.slice(0,60);};
 
@@ -677,11 +687,58 @@ function showBuyPreview(items,title,total,after){
 // ================= 영수증 사진 =================
 $("bReceipt").onclick=()=>{
   if(!APP){toast(L("핸드폰 앱에서 쓸 수 있어요","Disponível no app do celular"));return;}
-  openModal(`<h3>🧾 ${L("영수증 사진","Foto do cupom")}</h3><p class="muted">${L("마트 영수증 전체가 잘 보이게 찍어 주세요. 산 물건과 금액을 읽어서 넣어 드려요.","Fotografe o cupom inteiro e bem visível. Eu leio os itens e preços.")}</p>
-  <div class="two"><button class="btn-green" id="pCam">📷 ${L("사진 찍기","Tirar foto")}</button><button class="btn-ghost" id="pGal">🖼️ ${L("앨범에서","Da galeria")}</button></div>`);
+  openModal(`<h3>🧾 ${L("영수증 넣기","Cupom fiscal")}</h3>
+  <button class="btn-green full" id="pQr" style="font-size:18px;padding:15px">📱 ${L("QR 코드 찍기 (가장 정확해요)","Ler QR code (mais preciso)")}</button>
+  <p class="muted">${L("영수증 아래쪽 네모난 QR 코드를 찍으면 세무서(SEFAZ)에 등록된 물건 이름, 개수, 금액을 그대로 가져와요.","Leio o QR code no fim do cupom e trago itens, quantidades e preços direto da SEFAZ.")}</p>
+  <p class="muted" style="margin-top:14px">${L("QR이 없거나 안 될 때는 영수증 사진으로:","Sem QR? Use a foto do cupom:")}</p>
+  <div class="two"><button class="btn-ghost" id="pCam">📷 ${L("사진 찍기","Tirar foto")}</button><button class="btn-ghost" id="pGal">🖼️ ${L("앨범에서","Da galeria")}</button></div>`);
+  $("pQr").onclick=()=>{closeModal();Android.scanQr();};
   $("pCam").onclick=()=>{closeModal();Android.pickReceipt("camera");};
   $("pGal").onclick=()=>{closeModal();Android.pickReceipt("gallery");};
 };
+// QR → 세무서 페이지 → 물건 목록
+function parseNfce(html){
+  const doc=new DOMParser().parseFromString(html,"text/html");
+  const num=s=>{s=String(s||"").replace(/[^\d,.-]/g,"");if(s.includes(","))s=s.replace(/\./g,"").replace(",",".");return +s||0;};
+  const rows=[...doc.querySelectorAll("#tabResult tr, table#tabResult tr")];
+  let items=rows.map(tr=>{
+    const name=(tr.querySelector(".txtTit")||{}).textContent||"";
+    const qty=num(((tr.querySelector(".Rqtd")||{}).textContent||"").replace(/qtde\.?:?/i,""));
+    const unit=(((tr.querySelector(".RUN")||{}).textContent||"").replace(/un\.?:?/i,"")).trim().toUpperCase();
+    const price=num((tr.querySelector(".valor")||{}).textContent);
+    return {desc:name.trim(),qty,unit,price};
+  }).filter(x=>x.desc);
+  const totalEl=doc.querySelector(".totalNumb.txtMax")||[...doc.querySelectorAll(".totalNumb")].pop();
+  return {items,total:totalEl?num(totalEl.textContent):0,text:(doc.body?doc.body.innerText||doc.body.textContent:"").replace(/\s+/g," ").slice(0,15000)};
+}
+window.onNfceHtml=async html=>{
+  openModal(`<h3>📱 ${L("영수증 정리 중…","Organizando o cupom…")}</h3><div class="empty"><span class="spin dark"></span></div>`);
+  const p=parseNfce(html);
+  let items=[], total=p.total;
+  if(hasAI()){
+    try{
+      const s=state.settings;
+      const j=await withTimeout(FB_AI(`브라질 영수증(NFC-e) 품목이야. 가족 ${s.people}명.
+${p.items.length?"품목: "+JSON.stringify(p.items):"세무서 페이지 글자(여기서 품목을 찾아): "+p.text}
+각 품목을 바꿔줘:
+${ITEM_RULES()}
+- 약어를 풀어서 쉬운 이름으로 (예: PEPINO JAP → ${L("오이","Pepino")}, PAP HIG NEVE 12UN → ${L("화장지","Papel higiênico")} qty 12 unit "롤").
+- KG로 산 채소·과일은 개수로 대략 바꿔 unit "개" (오이 0,850kg ≈ 4개). 고기·생선은 unit "kg".
+- price: 그 줄의 총 금액. 봉투(SACOLA)·할인 줄은 빼.
+JSON: {"items":[...],"total":${total||0}}`),40000);
+      items=normItems(j.items); if(!total) total=+j.total||0;
+    }catch(e){ console.warn(e); }
+  }
+  if(!items.length&&p.items.length){
+    items=p.items.map(x=>{const kg=/KG/.test(x.unit);const n=x.desc.toLowerCase().replace(/\b(kg|un|und|pct|g)\b/g,"").trim();
+      const it=makeNew(n.charAt(0).toUpperCase()+n.slice(1),x.qty||1,kg?"kg":"");it.price=x.price;return it;});
+  }
+  if(!items.length){closeModal();toast(L("영수증 정보를 못 읽었어요. 사진으로 해 주세요","Não consegui ler. Use a foto do cupom"));return;}
+  showBuyPreview(items,L("📱 QR 영수증에서 가져왔어요","📱 Itens do QR code"),total);
+};
+window.onNfceError=msg=>{closeModal();toast(msg==="notnfce"?L("영수증 QR 코드가 아니에요","Não é QR de cupom fiscal"):L("세무서 페이지를 못 열었어요. 인터넷을 확인하거나 사진으로 해 주세요","Não abriu a página da SEFAZ. Use a foto"));};
+window.onNfceLoading=()=>openModal(`<h3>📱 ${L("세무서에서 가져오는 중…","Buscando na SEFAZ…")}</h3><div class="empty"><span class="spin dark"></span></div>`);
+
 window.onReceiptImage=async b64=>{
   if(!hasAI()){toast(L("인터넷이 연결돼야 영수증을 읽을 수 있어요","Precisa de internet para ler o cupom"));return;}
   openModal(`<h3>🧾 ${L("영수증 읽는 중…","Lendo o cupom…")}</h3><div class="empty"><span class="spin dark"></span></div>`);
@@ -929,7 +986,7 @@ function makeCode(){const c="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";let s="";for(let 
 async function createFamily(){
   if(!window.FB_FAM){famErr=L("인터넷 연결을 확인해 주세요","Verifique a internet");render();return;}
   const code=makeCode(); famErr="";
-  try{ await withTimeout(FB_FAM.put(code,{json:JSON.stringify(state),at:Date.now(),by:local.deviceId}),15000);
+  try{ await withTimeout(FB_FAM.put(code,{json:famJson(),at:Date.now(),by:local.deviceId}),15000);
     local.familyCode=code; saveLocal(); startFamily(); render(); toast(L("가족 코드를 만들었어요. 가족에게 보내 주세요","Código criado. Envie para a família"));
   }catch(e){ famErr=famErrMsg(e); render(); }
 }
@@ -945,14 +1002,16 @@ function joinFamilyAsk(){
     busy($("mOk"),true,"");
     try{ const d=await withTimeout(FB_FAM.get(code),15000);
       if(!d||!d.json){busy($("mOk"),false);toast(L("그런 코드가 없어요. 다시 확인해 주세요","Código não encontrado"));return;}
-      state=loadInto(d.json); local.familyCode=code; local.lastAt=d.at||0; saveLocal(); save(true); startFamily(); closeModal(); render(); toast(L("가족과 연결됐어요 👪","Conectado à família 👪"));
+      state=keepDiary(loadInto(d.json)); local.familyCode=code; local.lastAt=d.at||0; saveLocal(); save(true); startFamily(); closeModal(); render(); toast(L("가족과 연결됐어요 👪","Conectado à família 👪"));
     }catch(e){ busy($("mOk"),false); toast(famErrMsg(e)); }
   };
 }
+const famJson=()=>{const c={...state};delete c.diary;return JSON.stringify(c);};
+const keepDiary=n=>{n.diary=state.diary||{};return n;};
 async function pushFamily(){
   if(!local.familyCode||!window.FB_FAM) return;
   const at=Date.now();
-  try{ await FB_FAM.put(local.familyCode,{json:JSON.stringify(state),at,by:local.deviceId}); local.lastAt=at; saveLocal(); if(famStatus!=="ok"){famStatus="ok";renderFamily();} }
+  try{ await FB_FAM.put(local.familyCode,{json:famJson(),at,by:local.deviceId}); local.lastAt=at; saveLocal(); if(famStatus!=="ok"){famStatus="ok";renderFamily();} }
   catch(e){ famStatus="err"; famErr=famErrMsg(e); renderFamily(); }
 }
 async function startFamily(){
@@ -962,7 +1021,7 @@ async function startFamily(){
     famUnsub=await FB_FAM.listen(local.familyCode,d=>{
       famStatus="ok";
       if(d&&d.json&&d.by!==local.deviceId&&(d.at||0)>(local.lastAt||0)){
-        state=loadInto(d.json); local.lastAt=d.at; saveLocal(); save(true); render();
+        state=keepDiary(loadInto(d.json)); local.lastAt=d.at; saveLocal(); save(true); render();
       } else renderFamily();
     },e=>{famStatus="err";famErr=famErrMsg(e);renderFamily();});
   }catch(e){ famStatus="err"; famErr=famErrMsg(e); renderFamily(); }
@@ -1064,6 +1123,44 @@ JSON: {"answer":"..."}`),25000);
   $("say").value="";
   if(APP) try{Android.speak(ans);}catch(e){}
 }
+
+// ================= 오늘의 일기 (내 핸드폰에만 저장, 가족과 공유 안 함) =================
+const MOODS=[["😄",L("아주 좋음","ótimo")],["🙂",L("좋음","bem")],["😐",L("그냥","normal")],["😢",L("슬픔","triste")],["😠",L("화남","bravo")],["😴",L("피곤","cansado")],["🤒",L("아픔","doente")]];
+const WEATHERS=[["☀️",L("맑음","sol")],["⛅",L("구름","nublado")],["🌧️",L("비","chuva")],["⛈️",L("천둥","tempestade")],["🥶",L("추움","frio")],["🥵",L("더움","calor")]];
+let diaryDate=today();
+function diaryOf(d){ state.diary=state.diary||{}; return state.diary[d]||{mood:"",weather:"",text:""}; }
+function renderDiary(){
+  const box=$("diary"); if(!box) return;
+  const e=diaryOf(diaryDate);
+  const isToday=diaryDate===today();
+  const past=Object.keys(state.diary||{}).filter(d=>d!==diaryDate&&((state.diary[d].text||"").trim()||state.diary[d].mood)).sort().reverse().slice(0,7);
+  box.innerHTML=`
+    <div class="row"><button class="btn-ghost btn-sm" data-dd="-1">◀</button>
+      <div class="grow" style="text-align:center;font-weight:700">${isToday?L("오늘","Hoje")+" · ":""}${md(diaryDate)}</div>
+      <button class="btn-ghost btn-sm" data-dd="1" ${isToday?"disabled":""}>▶</button></div>
+    <label class="f">${L("오늘 기분","Humor")}</label>
+    <div class="emo">${MOODS.map(([m,t])=>`<button data-mood="${m}" class="${e.mood===m?"on":""}" title="${t}">${m}</button>`).join("")}</div>
+    <label class="f">${L("날씨","Tempo")}</label>
+    <div class="emo">${WEATHERS.map(([w,t])=>`<button data-weather="${w}" class="${e.weather===w?"on":""}" title="${t}">${w}</button>`).join("")}</div>
+    <label class="f">${L("특별한 일, 하고 싶은 말","Algo especial hoje")}</label>
+    <textarea id="diaryText" style="min-height:110px" placeholder="${L("예) 오늘 손님이 많아서 바빴다. 저녁에 딸이랑 카레 해먹음.","Ex.: hoje foi corrido na loja. À noite fiz curry com minha filha.")}">${esc(e.text)}</textarea>
+    <div class="two"><button class="soft-blue" id="diaryMic">🎤 ${L("말로 쓰기","Ditar")}</button><button class="btn-green" id="diarySave">💾 ${L("저장","Salvar")}</button></div>
+    ${past.length?`<label class="f">${L("지난 일기","Dias anteriores")}</label>${past.map(d=>{const x=state.diary[d];return `<div class="dline" data-dgo="${d}"><b>${md(d)}</b> ${x.mood||""}${x.weather||""} <span class="muted">${esc((x.text||"").slice(0,40))}${(x.text||"").length>40?"…":""}</span></div>`;}).join("")}`:""}`;
+  $("diarySave").onclick=()=>{saveDiary(true);};
+  $("diaryText").onblur=()=>saveDiary(false);
+  $("diaryMic").onclick=()=>{ if(APP){window.voiceMode="diary";Android.startVoice();} else toast(L("핸드폰 앱에서 돼요. 키보드의 🎤도 돼요","Use o 🎤 do teclado")); };
+}
+function saveDiary(show){
+  const t=$("diaryText"); if(!t) return;
+  const e=diaryOf(diaryDate); e.text=t.value; state.diary[diaryDate]=e;
+  save(); if(show){toast(L("일기를 저장했어요 📔","Diário salvo 📔"));renderDiary();}
+}
+document.addEventListener("click",ev=>{
+  const m=ev.target.closest("[data-mood]"); if(m){saveDiary(false);const e=diaryOf(diaryDate);e.mood=e.mood===m.dataset.mood?"":m.dataset.mood;state.diary[diaryDate]=e;save();renderDiary();return;}
+  const w=ev.target.closest("[data-weather]"); if(w){saveDiary(false);const e=diaryOf(diaryDate);e.weather=e.weather===w.dataset.weather?"":w.dataset.weather;state.diary[diaryDate]=e;save();renderDiary();return;}
+  const dd=ev.target.closest("[data-dd]"); if(dd){saveDiary(false);const n=addDays(diaryDate,+dd.dataset.dd);if(n<=today()){diaryDate=n;renderDiary();}return;}
+  const dg=ev.target.closest("[data-dgo]"); if(dg){saveDiary(false);diaryDate=dg.dataset.dgo;renderDiary();$("diaryCard").scrollIntoView({behavior:"smooth"});return;}
+});
 
 // ================= 직접 추가/수정 =================
 function editItem(it,cat){
@@ -1172,6 +1269,7 @@ $("bReset").onclick=function(){
 };
 $("mic").onclick=()=>{ window.voiceMode=$("say").value.trim()?"":"smart"; if(APP) Android.startVoice(); else toast(L("핸드폰 앱에서 쓸 수 있어요. 키보드의 🎤도 돼요","Use o 🎤 do teclado")); };
 window.onVoice=text=>{ if(window.voiceMode==="ask"){window.voiceMode="";$("say").value=text;onAsk();return;}
+  if(window.voiceMode==="diary"){window.voiceMode="";const t=$("diaryText");if(t){t.value=(t.value.trim()?t.value.trim()+" ":"")+text;saveDiary(false);}return;}
   if(window.voiceMode==="smart"){window.voiceMode="";$("say").value=text;onSmart();return;} $("say").value=($("say").value.trim()?$("say").value.trim()+" ":"")+text; toast(L("들었어요: ","Ouvi: ")+text); };
 
 applyLang();
