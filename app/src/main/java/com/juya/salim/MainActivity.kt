@@ -145,32 +145,42 @@ class MainActivity : Activity() {
 
     private fun js(code: String) = web.evaluateJavascript(code, null)
 
+    private fun namedShortcut(name: String) =
+        android.content.pm.ShortcutInfo.Builder(this, "named")
+            .setShortLabel(name.ifBlank { "도우미" }.take(12))
+            .setLongLabel("🎤 " + name.ifBlank { "도우미" })
+            .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.mipmap.ic_launcher))
+            .setIntent(Intent(this, MainActivity::class.java).setAction("com.juya.salim.TALK"))
+            .build()
+
+    // 빠르게: 안드로이드 13+ 이고 핸드폰 안 음성인식이 있으면 → 인터넷 안 거치고, 끊지 않고 쭉 듣기
+    private var onDevice = false
+    private var segmented = false
+
     private fun listenIntent(): Intent {
-        if (autoMode) {
-            val pt = Notifier.prefs(this).getString("lang", "ko") == "pt"
-            return Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (pt) "pt-BR" else "ko-KR")
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
-                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
-                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
-            }
-        }
         val pt = Notifier.prefs(this).getString("lang", "ko") == "pt"
         return Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (pt) "pt-BR" else "ko-KR")
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
-            // 잠깐 쉬어도 끊지 말라고 부탁 (안 듣는 폰도 있어서 아래에서 다시 켜 줌)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 5000L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 5000L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 15000L)
+            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)   // 받아 둔 한국어가 있으면 핸드폰 안에서 (빠름)
+            if (autoMode) {
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+            } else if (segmented) {
+                // 쭉 듣기: 1.2초 쉴 때마다 그 부분을 바로 글자로 → 멈춤 누를 때까지 계속
+                putExtra(RecognizerIntent.EXTRA_SEGMENTED_SESSION, RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
+            } else {
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 5000L)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 5000L)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 15000L)
+            }
         }
     }
 
-    private fun relisten(delay: Long = 120) {
+    private fun relisten(delay: Long = 40) {
         main.postDelayed({ if (listening) try { sr?.startListening(listenIntent()) } catch (e: Exception) { endListen() } }, delay)
     }
 
@@ -182,22 +192,27 @@ class MainActivity : Activity() {
         js("window.onVoiceState&&window.onVoiceState(false)")
     }
 
-    fun beginListen(auto: Boolean = false) {
-        autoMode = auto
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            pendingListen = true
-            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 2)
-            return
-        }
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            // 계속 듣기가 안 되는 폰 → 예전 방식
-            val i = listenIntent()
-            try { @Suppress("DEPRECATION") startActivityForResult(i, VOICE_REQ) } catch (e: Exception) {
-                Toast.makeText(this, "이 핸드폰에서는 음성 입력을 쓸 수 없어요", Toast.LENGTH_LONG).show() }
-            return
-        }
+    private fun makeRecognizer(): SpeechRecognizer {
+        val useDevice = Build.VERSION.SDK_INT >= 33 &&
+            !Notifier.prefs(this).getBoolean("sttOnline", false) &&
+            SpeechRecognizer.isOnDeviceRecognitionAvailable(this)
+        onDevice = useDevice
+        segmented = useDevice && !autoMode
+        return if (useDevice) SpeechRecognizer.createOnDeviceSpeechRecognizer(this) else SpeechRecognizer.createSpeechRecognizer(this)
+    }
+
+    /** 핸드폰 안 음성인식에 한국어가 없으면 → 이번엔 인터넷 방식으로, 다음을 위해 한국어 받아 두기 */
+    private fun fallbackOnline() {
+        try { if (Build.VERSION.SDK_INT >= 33) sr?.triggerModelDownload(listenIntent()) } catch (e: Exception) { }
+        Notifier.prefs(this).edit().putBoolean("sttOnline", true).apply()
+        main.postDelayed({ Notifier.prefs(this).edit().putBoolean("sttOnline", false).apply() }, 10 * 60 * 1000L)
         try { sr?.destroy() } catch (e: Exception) { }
-        sr = SpeechRecognizer.createSpeechRecognizer(this)
+        sr = null
+        startRecognizer()
+    }
+
+    private fun startRecognizer() {
+        sr = makeRecognizer()
         sr!!.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {}
             override fun onBeginningOfSpeech() {}
@@ -210,36 +225,64 @@ class MainActivity : Activity() {
                 errCount = 0
                 if (t.isNotBlank()) js("window.onVoicePartial&&window.onVoicePartial(${JSONObject.quote(t)})")
             }
+            // 쭉 듣기에서 한 덩어리 끝날 때마다
+            override fun onSegmentResults(b: Bundle) {
+                val t = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
+                if (t.isNotBlank()) { errCount = 0; js("window.onVoiceFinal&&window.onVoiceFinal(${JSONObject.quote(t)})") }
+            }
+            override fun onEndOfSegmentedSession() {
+                if (listening) relisten() else endListen()
+            }
             override fun onResults(b: Bundle?) {
                 val t = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
                 if (t.isNotBlank()) { errCount = 0; js("window.onVoiceFinal&&window.onVoiceFinal(${JSONObject.quote(t)})") }
                 if (listening && !autoMode) relisten() else endListen()
             }
             override fun onError(error: Int) {
+                // 핸드폰 안 음성인식에 한국어가 없음 → 인터넷 방식으로 바로 바꿔서 계속
+                if (onDevice && (error == 12 || error == 13 || error == SpeechRecognizer.ERROR_CLIENT && errCount == 0 && segmented)) {
+                    errCount++; if (listening) { fallbackOnline(); return } }
                 if (!listening) { endListen(); return }
-                if (autoMode && (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT)) { endListen(); return }
-                // 계속 실패하면(인터넷 끊김 등) 무한 반복하지 말고 멈춤
+                // 조용해서 못 들은 건 실패가 아님 → 바로 다시 듣기
+                if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                    if (autoMode) endListen() else relisten()
+                    return
+                }
                 errCount++
-                if (errCount >= 8 || error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) {
-                    if (errCount >= 8 || error != SpeechRecognizer.ERROR_NO_MATCH) {
-                        endListen()
-                        Toast.makeText(this@MainActivity, "잘 안 들려요. 인터넷을 확인하고 다시 눌러 주세요 / Tente de novo", Toast.LENGTH_LONG).show()
-                        return
-                    }
+                if (errCount >= 6 || error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) {
+                    endListen()
+                    Toast.makeText(this@MainActivity, "잘 안 들려요. 인터넷을 확인하고 다시 눌러 주세요 / Tente de novo", Toast.LENGTH_LONG).show()
+                    return
                 }
                 when (error) {
-                    SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> relisten()
-                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY, SpeechRecognizer.ERROR_CLIENT -> { try { sr?.cancel() } catch (e: Exception) {}; relisten(400) }
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY, SpeechRecognizer.ERROR_CLIENT -> { try { sr?.cancel() } catch (e: Exception) {}; relisten(150) }
                     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> endListen()
-                    else -> relisten(600)
+                    else -> relisten(200)
                 }
             }
         })
+        try { sr!!.startListening(listenIntent()) } catch (e: Exception) { endListen() }
+    }
+
+    fun beginListen(auto: Boolean = false) {
+        autoMode = auto
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            pendingListen = true
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 2)
+            return
+        }
+        if (!SpeechRecognizer.isRecognitionAvailable(this) && !(Build.VERSION.SDK_INT >= 33 && SpeechRecognizer.isOnDeviceRecognitionAvailable(this))) {
+            val i = listenIntent()
+            try { @Suppress("DEPRECATION") startActivityForResult(i, VOICE_REQ) } catch (e: Exception) {
+                Toast.makeText(this, "이 핸드폰에서는 음성 입력을 쓸 수 없어요", Toast.LENGTH_LONG).show() }
+            return
+        }
+        try { sr?.destroy() } catch (e: Exception) { }
         listening = true
         errCount = 0
         muteBeep(true)
         js("window.onVoiceState&&window.onVoiceState(true)")
-        try { sr!!.startListening(listenIntent()) } catch (e: Exception) { endListen() }
+        startRecognizer()
     }
 
     fun finishListen() {
@@ -559,6 +602,36 @@ class MainActivity : Activity() {
             runOnUiThread {
                 try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
                 catch (e: Exception) { Toast.makeText(this@MainActivity, "브라우저를 열 수 없어요", Toast.LENGTH_SHORT).show() }
+            }
+        }
+
+        /** 바탕화면에 내가 정한 이름의 아이콘 만들기 (누르면 바로 듣기) */
+        @JavascriptInterface
+        fun pinShortcut(name: String) {
+            runOnUiThread {
+                val sm = getSystemService(android.content.pm.ShortcutManager::class.java)
+                val info = namedShortcut(name)
+                try { sm.addDynamicShortcuts(listOf(info)) } catch (e: Exception) { }
+                if (sm != null && sm.isRequestPinShortcutSupported) sm.requestPinShortcut(info, null)
+                else Toast.makeText(this@MainActivity, "이 핸드폰은 아이콘 만들기를 지원하지 않아요. 앱 아이콘을 꾹 눌러 '$name'을 쓰세요", Toast.LENGTH_LONG).show()
+            }
+        }
+
+        @JavascriptInterface
+        fun renameShortcut(name: String) {
+            runOnUiThread {
+                val sm = getSystemService(android.content.pm.ShortcutManager::class.java) ?: return@runOnUiThread
+                try { sm.addDynamicShortcuts(listOf(namedShortcut(name))); sm.updateShortcuts(listOf(namedShortcut(name))) } catch (e: Exception) { }
+            }
+        }
+
+        /** 다른 앱 열기 (Google Home 등) */
+        @JavascriptInterface
+        fun openApp(pkg: String) {
+            runOnUiThread {
+                val i = packageManager.getLaunchIntentForPackage(pkg)
+                if (i != null) startActivity(i)
+                else try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$pkg"))) } catch (e: Exception) { }
             }
         }
 

@@ -221,7 +221,7 @@
     </div>
     <div class="card">
       <h2>🗣️ <span data-pt="Falar como com um amigo">친구처럼 부르기</span></h2>
-      <p class="muted" style="margin:0 0 8px" data-pt="Diga &quot;Ok Google, abrir Ajudante da Casa&quot;. O app abre, responde &quot;Pode falar&quot; e já escuta. Para o diário, comece com &quot;diário…&quot;.">"오케이 구글, 집 도우미 열어 줘"라고 하면 앱이 열리면서 "네, 말씀하세요" 하고 바로 들어요. 일기는 "일기, 오늘은…" 하고 말하면 돼요.</p>
+      <p class="muted" style="margin:0 0 8px" data-pt="Dê um nome à sua ajudante. Diga &quot;Ok Google, abrir Ajudante da Casa&quot; (ou o nome, depois de configurar) e ela já escuta. Para o diário, comece com &quot;diário…&quot;.">도우미 이름을 정해 주세요. "오케이 구글, 집 도우미 열어 줘"(설정하면 "오케이 구글, 이름")라고 하면 바로 들어요. 일기는 "일기, 오늘은…" 하고 말하면 돼요.</p>
       <div id="friendBox"></div>
     </div>
     <div class="card">
@@ -1044,8 +1044,14 @@ async function onSmart(){
   if(useC.length){ const r=estimateUse(useC.join(" "),foods); used=r.used.concat(homeUseLocal(useC.join(" ")));
     if(r.found.length) comment=L(`${[...new Set(r.found)].join(", ")} — 가족 ${state.settings.people}명 기준 평균치예요.`,`${[...new Set(r.found)].join(", ")} — média para ${state.settings.people} pessoas.`); }
   question=qC.join(" ");
-  // 2) AI가 있으면 더 똑똑하게 나누기
-  if(hasAI()){
+  // 앱이 혼자 다 알아들었으면 AI 안 거치고 바로 (빠르게)
+  const knownName=n=>{const c=canon(n);return SHELF[c]!=null||HOME[c]!=null||EMO[c]!=null||state.items.some(i=>canon(i.name)===c);};
+  const localOk=(buy.length||used.length||question)
+    && buy.every(i=>knownName(i.name))
+    && (!useC.length||used.length)
+    && (!question||answerLocal(question)!=null);
+  // 2) 모르는 말이 있을 때만 AI로 더 똑똑하게 나누기
+  if(hasAI()&&!localOk){
     const btn=$("bGo"); busy(btn,true,L("나누는 중","Separando"));
     try{
       const inv=state.items.filter(i=>nowQty(i)>0).map(i=>({name:i.name,qty:r1(nowQty(i)),unit:i.unit||"개",cat:i.cat}));
@@ -1060,7 +1066,7 @@ ${ITEM_RULES()}
 3) question: 궁금해서 물어본 문장(없으면 "")
 comment: 사용한 것에 대한 ${langName()} 한 줄 요약(없으면 "")
 JSON: {"buy":[],"used":[{"name":"","qty":1,"why":""}],"question":"","comment":""}
-사용자 말: """${text}"""`),30000);
+사용자 말: """${text}"""`),12000);
       const b=normItems(j.buy); 
       const allItems=state.items.filter(i=>nowQty(i)>0);
       const u=(j.used||[]).map(x=>({it:allItems.find(f=>f.name===x.name)||allItems.find(f=>x.name&&canon(f.name)===canon(x.name)),qty:+x.qty||0,why:x.why||""})).filter(x=>x.it&&x.qty>0).map(x=>({...x,qty:Math.min(x.qty,nowQty(x.it))}));
@@ -1538,14 +1544,34 @@ window.onVoice=text=>{ if(window.voiceMode==="ask"){window.voiceMode="";$("say")
 // ================= 친구처럼 부르기 =================
 const speak=t=>{ if(APP) try{Android.speak(t);}catch(e){} };
 if(local.voiceOnOpen===undefined) local.voiceOnOpen=true;
+const helperName=()=>(local.helperName||"").trim()||L("도우미","Ajudante");
 function renderFriend(){
   const b=$("friendBox"); if(!b) return;
-  b.innerHTML=`<label class="f">${L("앱을 열면 바로 듣기","Escutar ao abrir o app")}</label>
+  const nm=helperName();
+  b.innerHTML=`<label class="f">${L("내 도우미 이름","Nome da sua ajudante")}</label>
+    <div class="row"><input id="hName" class="grow" maxlength="12" value="${esc(local.helperName||"")}" placeholder="${L("예) 복순이","Ex.: Dona Rosa")}"><button class="btn-green btn-sm" id="hSave">${L("저장","Salvar")}</button></div>
+    <div class="two"><button class="btn-ghost" id="hPin">📌 ${L(`'${esc(nm)}' 아이콘 만들기`,`Criar ícone '${esc(nm)}'`)}</button><button class="btn-ghost" id="hHow">🗣️ ${L("목소리로 부르는 법","Chamar pela voz")}</button></div>
+    <label class="f">${L("앱을 열면 바로 듣기","Escutar ao abrir o app")}</label>
     <div class="seg"><button data-fr="1" class="${local.voiceOnOpen?"on":""}">${L("켜기","Ligado")}</button><button data-fr="0" class="${!local.voiceOnOpen?"on":""}">${L("끄기","Desligado")}</button></div>
     <div class="two"><button class="btn-blue" id="frTry">🗣️ ${L("지금 해 보기","Testar agora")}</button><button class="btn-ghost" id="frDiary">📔 ${L("말로 일기","Diário falado")}</button></div>
     <p class="muted" style="margin:8px 0 0">${L("앱 아이콘을 꾹 누르면 '말하기', '말로 일기' 바로가기도 있어요. 화면이 잠겨 있으면 먼저 잠금을 풀어야 열려요.","Segure o ícone do app para os atalhos 'Falar' e 'Diário falado'. Com a tela bloqueada, desbloqueie primeiro.")}</p>`;
 }
+function howToCall(){
+  const nm=helperName(), call=nm;
+  openModal(`<h3>🗣️ ${L(`"오케이 구글, ${esc(call)}"로 부르기`,`"Ok Google, ${esc(call)}"`)}</h3>
+  <p class="muted">${L("화면이 꺼져 있을 때 듣고 있는 건 구글뿐이라서, 구글에게 '이 말을 하면 집 도우미를 열어 줘'라고 한 번만 알려 주면 돼요.","Com a tela apagada só o Google escuta. Ensine uma vez ao Google a abrir o app quando você disser o nome.")}</p>
+  <div class="kstep" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px">
+  ${L(`1. <b>Google Home</b> 앱 열기<br>2. 아래 <b>자동화</b> → <b>＋ 추가</b> → <b>개인</b><br>3. 시작 조건 추가 → <b>Google 어시스턴트에게 말할 때</b> → <b>${esc(call)}</b> 입력<br>4. 작업 추가 → <b>직접 명령어 추가</b> → <b>집 도우미 열어</b> 입력<br>5. <b>저장</b>`,
+     `1. Abra o app <b>Google Home</b><br>2. <b>Automações</b> → <b>＋ Adicionar</b> → <b>Pessoal</b><br>3. Ativação → <b>Quando eu disser ao Google Assistente</b> → <b>${esc(call)}</b><br>4. Ação → <b>Adicionar comandos personalizados</b> → <b>abrir Ajudante da Casa</b><br>5. <b>Salvar</b>`)}</div>
+  <p class="muted">${L(`이제 <b>"오케이 구글, ${esc(call)}"</b> 하면 앱이 열리면서 대답하고 바로 들어요.`,`Agora diga <b>"Ok Google, ${esc(call)}"</b> e o app abre escutando.`)}</p>
+  <div class="two"><button class="btn-ghost" id="mCancel">${L("닫기","Fechar")}</button><button class="btn-green" id="hHome">${L("Google Home 열기","Abrir Google Home")}</button></div>`);
+  $("mCancel").onclick=closeModal;
+  $("hHome").onclick=()=>{ if(APP) try{Android.openApp("com.google.android.apps.chromecast.app");}catch(e){openUrl("https://home.google.com/");} closeModal(); };
+}
 document.addEventListener("click",e=>{
+  if(e.target.closest("#hSave")){ local.helperName=$("hName").value.trim(); saveLocal(); renderFriend(); if(APP) try{Android.renameShortcut(helperName());}catch(err){} toast(L(`이제 이름은 '${helperName()}'이에요 😊`,`Agora o nome é '${helperName()}' 😊`)); return; }
+  if(e.target.closest("#hPin")){ if(APP) Android.pinShortcut(helperName()); else toast(L("핸드폰 앱에서 돼요","Só no app")); return; }
+  if(e.target.closest("#hHow")){ howToCall(); return; }
   const f=e.target.closest("[data-fr]"); if(f){local.voiceOnOpen=f.dataset.fr==="1";saveLocal();renderFriend();return;}
   if(e.target.closest("#frTry")) window.onAppOpen("talk");
   if(e.target.closest("#frDiary")) window.onAppOpen("diary");
@@ -1560,6 +1586,8 @@ function applyDiaryVoice(e,add){
   state.diary[today()]=e; save(); renderDiary();
 }
 function friendSaid(text){
+  const nm=helperName().replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+  text=(text||"").replace(new RegExp("^\\s*(오케이\\s*구글|헤이\\s*구글|ok\\s*google)?[,\\s]*"+nm+"\\s*(아|야|이|님|씨)?[,!.\\s]*","i"),"").trim();
   if(!text){ speak(L("잘 못 들었어요. 다시 불러 주세요","Não ouvi bem. Tente de novo")); return; }
   // "일기, 오늘은…" → 일기
   const dm=text.match(/^\s*(일기|오늘\s*일기|diário|diario)\s*(써\s*줘|쓸게|에|는|,|:)?\s*(.*)$/i) || (/일기\s*(써|에\s*적어|적어)/.test(text)?[null,null,null,text.replace(/일기\s*(써\s*줘|에\s*적어\s*줘|적어\s*줘)?/,"").trim()]:null);
@@ -1575,7 +1603,7 @@ window.onAppOpen=mode=>{
   mode=mode||(local.voiceOnOpen?"talk":""); if(!mode||!APP) return;
   closeModal(); showTab("v-home");
   if(mode==="diary"){ diaryDate=today(); renderDiary(); $("diaryCard").scrollIntoView({behavior:"smooth"}); speak(L("오늘 일기를 말씀하세요","Conte como foi seu dia")); setTimeout(()=>startVoice("diaryAuto"),1700); }
-  else { speak(L("네, 말씀하세요","Sim, pode falar")); setTimeout(()=>startVoice("friend"),1500); }
+  else { speak(L(`네, ${helperName()} 여기 있어요. 말씀하세요`,`Oi, aqui é ${helperName()}. Pode falar`)); setTimeout(()=>startVoice("friend"),2300); }
 };
 
 applyLang();
