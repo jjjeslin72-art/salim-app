@@ -136,6 +136,7 @@
 
     <div class="card">
       <h2>🔔 <span data-pt="Avisos">알림</span></h2>
+      <p class="muted" style="margin:-4px 0 6px;font-size:12px" data-pt="⚠️ Prazos de validade são estimativas médias. Sempre confira cheiro, cor e embalagem antes de comer.">⚠️ 신선 기간은 평균 추정이에요. 먹기 전에 냄새·색·포장 날짜를 꼭 직접 확인하세요.</p>
       <div id="alerts"></div>
     </div>
 
@@ -163,6 +164,7 @@
     <div class="card">
       <div class="row"><h2 class="grow" style="margin:0">🥬 <span data-pt="Alimentos">식재료</span></h2><button class="btn-ghost btn-sm" data-add="food" data-pt="＋ Adicionar">＋ 직접 추가</button></div>
       <p class="muted" style="margin:6px 0 0" data-pt="Toque para editar · segure para apagar">눌러서 수정 · 꾹 누르면 삭제</p>
+      <p class="muted" style="margin:2px 0 0;font-size:12px" data-pt="⚠️ Dias de validade = estimativa. Confira sempre antes de comer.">⚠️ 신선 기간은 추정이에요. 먹기 전에 꼭 직접 확인하세요.</p>
       <div id="foodList"></div>
     </div>
   </section>
@@ -238,9 +240,13 @@
       <button class="btn-blue full" id="bTest" style="margin-top:14px" data-pt="🔔 Testar aviso agora">🔔 알림 지금 시험해 보기</button>
     </div>
     <div class="card">
+      <h2>🔒 <span data-pt="Privacidade e IA">개인정보·AI</span></h2>
+      <div id="privBox"></div>
+    </div>
+    <div class="card">
       <h2>💾 <span data-pt="Dados">저장</span></h2>
-      <p class="muted" data-pt="Fica salvo neste celular (e na família, se estiver ligada).">이 핸드폰에 저장돼요. 가족과 연결하면 가족 핸드폰에도 같이 저장돼요.</p>
-      <button class="btn-red btn-sm" id="bReset" data-pt="Apagar tudo e recomeçar">전체 지우고 새로 시작</button>
+      <p class="muted" data-pt="Fica salvo neste celular (e na família, se estiver ligada). O diário fica só neste celular.">이 핸드폰에 저장돼요. 가족과 연결하면 가족 핸드폰에도 같이 저장돼요. 일기는 이 핸드폰에만 있어요.</p>
+      <button class="btn-red btn-sm" id="bReset" data-pt="Apagar todos os meus dados">내 데이터 모두 지우기</button>
     </div>
   </section>
 </main>
@@ -289,14 +295,15 @@ try{
   // --- 가족 같이 쓰기 (Firestore: salimFamilies/{코드}) ---
   try{
     const { getAuth, signInAnonymously } = await import(G+"firebase-auth.js");
-    const { getFirestore, doc, getDoc, setDoc, onSnapshot } = await import(G+"firebase-firestore.js");
+    const { getFirestore, doc, getDoc, setDoc, onSnapshot, deleteDoc } = await import(G+"firebase-firestore.js");
     const auth = getAuth(app), fs = getFirestore(app);
     const ready = async () => { if (!auth.currentUser) await signInAnonymously(auth); };
     window.FB_FAM = {
       ready,
       get: async code => { await ready(); const s = await getDoc(doc(fs, "salimFamilies", code)); return s.exists() ? s.data() : null; },
       put: async (code, data) => { await ready(); await setDoc(doc(fs, "salimFamilies", code), data); },
-      listen: async (code, cb, err) => { await ready(); return onSnapshot(doc(fs, "salimFamilies", code), s => cb(s.exists() ? s.data() : null), err); }
+      listen: async (code, cb, err) => { await ready(); return onSnapshot(doc(fs, "salimFamilies", code), s => cb(s.exists() ? s.data() : null), err); },
+      del: async code => { await ready(); await deleteDoc(doc(fs, "salimFamilies", code)); }
     };
   }catch(e){ console.warn("fam",e); }
 }catch(e){ console.warn("firebase",e); }
@@ -436,7 +443,13 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 const brl=n=>{try{return Number(n||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});}catch(e){return "R$ "+Number(n||0).toFixed(2);}};
 const APP = !!(window.Android && Android.isApp);
 const withTimeout=(p,ms)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))]);
-const hasAI=()=>typeof window.FB_AI==="function";
+// AI는 동의했을 때만, 하루 100번까지 (사용료·남용 방지)
+const AI_DAILY=100;
+function aiLeft(){ const d=today(); if(!local.aiDay||local.aiDay.d!==d) local.aiDay={d,n:0}; return AI_DAILY-local.aiDay.n; }
+const hasAI=()=>typeof window.FB_AI==="function"&&local.aiConsent===true&&aiLeft()>0;
+window.addEventListener("fb-ready",()=>{ if(typeof window.FB_AI==="function"&&!window.FB_AI.__wrapped){ const orig=window.FB_AI;
+  window.FB_AI=async(...a)=>{ if(local.aiConsent!==true) throw new Error("no-consent"); if(aiLeft()<=0) throw new Error("limit");
+    local.aiDay.n++; saveLocal(); return orig(...a); }; window.FB_AI.__wrapped=true; } });
 const langName=()=>L("한국어","포르투갈어(브라질)");
 
 // ================= 저장 =================
@@ -611,6 +624,7 @@ function render(){
   renderAlarm();
   renderK();
   renderPrices();
+  renderPriv();
   if(!document.activeElement||document.activeElement.id!=="diaryText") renderDiary();
 }
 const addLog=(type,text)=>{state.log.unshift({date:today(),type,text});state.log=state.log.slice(0,60);};
@@ -855,7 +869,7 @@ $("bReceipt").onclick=()=>{
   openModal(`<h3>🧾 ${L("영수증 넣기","Cupom fiscal")}</h3>
   <button class="btn-green full" id="pQr" style="font-size:18px;padding:15px">📱 ${L("QR 코드 찍기 (가장 정확해요)","Ler QR code (mais preciso)")}</button>
   <p class="muted">${L("영수증 아래쪽 네모난 QR 코드를 찍으면 세무서(SEFAZ)에 등록된 물건 이름, 개수, 금액을 그대로 가져와요.","Leio o QR code no fim do cupom e trago itens, quantidades e preços direto da SEFAZ.")}</p>
-  <p class="muted" style="margin-top:14px">${L("QR이 없거나 안 될 때는 영수증 사진으로:","Sem QR? Use a foto do cupom:")}</p>
+  <p class="muted" style="margin-top:14px">${L("QR이 없거나 안 될 때는 영수증 사진으로 (사진은 구글 AI가 읽어요. CPF가 찍혀 있으면 손으로 가리고 찍어 주세요):","Sem QR? Use a foto do cupom (a IA do Google lê a foto; se tiver CPF, cubra com o dedo):")}</p>
   <div class="two"><button class="btn-ghost" id="pCam">📷 ${L("사진 찍기","Tirar foto")}</button><button class="btn-ghost" id="pGal">🖼️ ${L("앨범에서","Da galeria")}</button></div>`);
   $("pQr").onclick=()=>{closeModal();Android.scanQr();};
   $("pCam").onclick=()=>{closeModal();Android.pickReceipt("camera");};
@@ -875,7 +889,8 @@ function parseNfce(html){
   }).filter(x=>x.desc);
   const totalEl=doc.querySelector(".totalNumb.txtMax")||[...doc.querySelectorAll(".totalNumb")].pop();
   const st=(doc.querySelector("#u20")||doc.querySelector(".txtTopo")||{}).textContent||"";
-  return {store:st.replace(/\s+/g," ").trim().slice(0,40),items,total:totalEl?num(totalEl.textContent):0,text:(doc.body?doc.body.innerText||doc.body.textContent:"").replace(/\s+/g," ").slice(0,15000)};
+  const noCpf=t=>String(t||"").replace(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g,"***").replace(/CPF[^\n]{0,40}/gi,"CPF ***").replace(/Consumidor[^\n]{0,80}/gi,"Consumidor ***");
+  return {store:st.replace(/\s+/g," ").trim().slice(0,40),items,total:totalEl?num(totalEl.textContent):0,text:noCpf((doc.body?doc.body.innerText||doc.body.textContent:"").replace(/\s+/g," ")).slice(0,15000)};
 }
 window.onNfceHtml=async html=>{
   openModal(`<h3>📱 ${L("영수증 정리 중…","Organizando o cupom…")}</h3><div class="empty"><span class="spin dark"></span></div>`);
@@ -906,6 +921,7 @@ window.onNfceError=msg=>{closeModal();toast(msg==="notnfce"?L("영수증 QR 코�
 window.onNfceLoading=()=>openModal(`<h3>📱 ${L("세무서에서 가져오는 중…","Buscando na SEFAZ…")}</h3><div class="empty"><span class="spin dark"></span></div>`);
 
 window.onReceiptImage=async b64=>{
+  if(local.aiConsent!==true){ toast(L("영수증 사진은 AI를 켜야 읽을 수 있어요 (설정 → 개인정보·AI)","Para ler a foto, ative a IA (Ajustes → Privacidade e IA)"),4000); return; }
   if(!hasAI()){toast(L("인터넷이 연결돼야 영수증을 읽을 수 있어요","Precisa de internet para ler o cupom"));return;}
   openModal(`<h3>🧾 ${L("영수증 읽는 중…","Lendo o cupom…")}</h3><div class="empty"><span class="spin dark"></span></div>`);
   try{
@@ -1145,11 +1161,17 @@ function renderFamily(){
   }else{
     box.innerHTML=`<p class="muted" style="margin:0">${L("우리 가족 코드","Código da família")}</p><div class="code">${esc(local.familyCode)}</div>
     <p class="muted">${famStatus==="ok"?L("✅ 연결됨 — 바뀌면 가족 핸드폰에 바로 반영돼요","✅ Conectado — muda na hora nos outros celulares"):famStatus==="err"?`<span style="color:var(--red)">${esc(famErr)}</span>`:L("연결 중…","Conectando…")}</p>
-    <div class="two"><button class="btn-green" id="famShare">📤 ${L("코드 보내기","Enviar código")}</button><button class="btn-ghost" id="famLeave">${L("연결 끊기","Sair")}</button></div>`;
+    <div class="two"><button class="btn-green" id="famShare">📤 ${L("코드 보내기","Enviar código")}</button><button class="btn-ghost" id="famLeave">${L("연결 끊기","Sair")}</button></div>
+    <button class="btn-red btn-sm full" id="famWipe" style="margin-top:8px">${L("🗑️ 서버에 올린 가족 데이터 지우기","🗑️ Apagar dados da família no servidor")}</button>
+    <p class="muted" style="font-size:12px">${L("가족 공유 데이터(일기 빼고)는 구글 Firebase 서버에 저장돼요.","Os dados da família (sem o diário) ficam no servidor Google Firebase.")}</p>`;
     $("famShare").onclick=()=>{const t=L(`🏠 집 도우미 가족 코드: ${local.familyCode}\n앱 설정 → 가족과 같이 쓰기 → 코드 넣기`,`🏠 Código da família no app Ajudante da Casa: ${local.familyCode}\nAjustes → Usar junto com a família → Entrar com código`);
       if(APP) Android.share(t); else {try{navigator.clipboard.writeText(t);toast("OK");}catch(e){}}};
     $("famLeave").onclick=function(){ if(!this.dataset.sure){this.dataset.sure="1";this.textContent=L("한 번 더 누르세요","Toque de novo");return;}
       if(famUnsub){try{famUnsub();}catch(e){}famUnsub=null;} local.familyCode="";saveLocal();famStatus="";render();toast(L("연결을 끊었어요. 내 핸드폰 데이터는 그대로예요","Desconectado. Seus dados continuam aqui")); };
+    $("famWipe").onclick=async function(){ if(!this.dataset.sure){this.dataset.sure="1";this.textContent=L("가족 모두에게서 지워져요. 한 번 더","Apaga para toda a família. Toque de novo");return;}
+      const code=local.familyCode; if(famUnsub){try{famUnsub();}catch(e){}famUnsub=null;}
+      try{ await withTimeout(FB_FAM.del(code),10000); toast(L("서버에서 지웠어요","Apagado do servidor")); }catch(e){ toast(famErrMsg(e)); }
+      local.familyCode="";saveLocal();famStatus="";render(); };
   }
 }
 const famErrMsg=e=>{const m=String(e&&(e.code||e.message)||e);
@@ -1351,17 +1373,7 @@ async function diaryUse(e){
     const q=/kg/i.test(it.unit||"")?Math.min(it.qty,0.5*state.settings.people/4):Math.min(it.qty,it.qty<=2?it.qty:Math.max(1,Math.round(state.settings.people/2)));
     used.push({it,qty:Math.round(q*10)/10,why:L("일기","diário")});
   }
-  if(hasAI()){
-    try{
-      const j=await withTimeout(FB_AI(`가족 ${state.settings.people}명. 재고: ${JSON.stringify(foods.map(f=>({name:f.name,qty:r1(f.qty),unit:f.unit||"개"})))}
-(망가=망고, 마멍=파파야, 생선전=생선으로 만든 전)
-일기 내용: """${text}"""
-일기에서 오늘 해먹거나 먹은 음식을 찾아, 이 가족이 한 끼에 보통 쓰는 재료 양(평균치)을 재고에서 뺄 양으로 알려줘. 재고에 있는 것만, name은 재고 이름 그대로, 재고 이하. 먹은 게 없으면 빈 배열.
-JSON: {"used":[{"name":"","qty":1,"why":"${L("짧게","curto")}"}]}`),20000);
-      if(Array.isArray(j.used)){ const u=j.used.map(x=>({it:foods.find(f=>f.name===x.name)||foods.find(f=>x.name&&canon(f.name)===canon(x.name)),qty:+x.qty||0,why:x.why||""})).filter(x=>x.it&&x.qty>0).map(x=>({...x,qty:Math.min(x.qty,x.it.qty)}));
-        if(u.length) used=u; }
-    }catch(err){ console.warn(err); }
-  }
+  // 일기는 개인적인 글이라 AI(인터넷)로 보내지 않고 핸드폰 안에서만 찾아요
   if(!used.length) return;
   const done=()=>{ e.usedFor=text; state.diary[diaryDate]=e; save(); };
   showUsePreview(used,"📔 "+text.slice(0,40),L("일기에서 해먹은 걸 찾았어요. 맞으면 '빼기'를 눌러 주세요.","Achei no diário o que você comeu. Se estiver certo, toque em 'Descontar'."),done);
@@ -1507,10 +1519,51 @@ $("shopSend").onclick=()=>{
   if(APP) Android.share(text); else {try{navigator.clipboard.writeText(text);toast("OK");}catch(e){}}
 };
 $("bTest").onclick=()=>{ if(APP) Android.testNotify(); else toast(L("핸드폰 앱에서만 돼요","Só no app do celular")); };
-$("bReset").onclick=function(){
-  if(!this.dataset.sure){this.dataset.sure="1";this.textContent=L("정말 다 지울까요? 한 번 더 누르세요","Apagar tudo? Toque de novo");return;}
-  state=fresh();save();render();this.dataset.sure="";applyLang();toast(L("새로 시작해요","Recomeçando"));
+$("bReset").onclick=async function(){
+  if(!this.dataset.sure){this.dataset.sure="1";this.textContent=L("정말 다 지울까요? (가족 서버 것도) 한 번 더 누르세요","Apagar tudo (inclusive no servidor da família)? Toque de novo");return;}
+  // 가족 서버에 올린 데이터도 지움 (LGPD: 지울 권리)
+  if(local.familyCode&&window.FB_FAM&&FB_FAM.del){ try{ if(famUnsub){famUnsub();famUnsub=null;} await withTimeout(FB_FAM.del(local.familyCode),10000);}catch(e){} }
+  local.familyCode=""; saveLocal();
+  state=fresh();save(true);render();this.dataset.sure="";applyLang();toast(L("모두 지웠어요","Tudo apagado"));
 };
+// ---- 개인정보·AI 설정 ----
+const POLICY_URL="https://jjjeslin72-art.github.io/salim-app/privacy.html";
+function renderPriv(){
+  const b=$("privBox"); if(!b) return;
+  b.innerHTML=`<label class="f">${L("구글 AI로 더 똑똑하게 알아듣기","IA do Google para entender melhor")}</label>
+    <div class="seg"><button data-ai="1" class="${local.aiConsent===true?"on":""}">${L("켜기","Ligado")}</button><button data-ai="0" class="${local.aiConsent!==true?"on":""}">${L("끄기","Desligado")}</button></div>
+    <p class="muted" style="font-size:12.5px">${L("켜면 앱이 모르는 말·영수증 사진·물어본 질문이 구글 AI(Gemini)로 가요. 일기는 절대 안 보내요. 끄면 핸드폰 안에서만 알아들어요 (영수증 사진 읽기·요리 추천 AI는 안 돼요).","Ligada, frases que o app não entende, fotos de cupom e perguntas vão para a IA do Google (Gemini). O diário nunca é enviado. Desligada, tudo fica no celular (sem leitura de foto do cupom).")}
+    ${local.aiConsent===true?`<br>${L("오늘 남은 AI 사용","IA restante hoje")}: ${aiLeft()}/${AI_DAILY}`:""}</p>
+    <div class="two"><button class="btn-ghost" id="pPolicy">📄 ${L("개인정보처리방침","Política de privacidade")}</button><button class="btn-ghost" id="pLic">📚 ${L("오픈소스 라이선스","Licenças open source")}</button></div>`;
+}
+document.addEventListener("click",e=>{
+  const a=e.target.closest("[data-ai]"); if(a){ local.aiConsent=a.dataset.ai==="1"; saveLocal(); renderPriv(); toast(local.aiConsent?L("AI를 켰어요","IA ligada"):L("AI를 껐어요. 핸드폰 안에서만 처리해요","IA desligada. Tudo fica no celular")); return; }
+  if(e.target.closest("#pPolicy")){ showDoc("privacy.html",L("개인정보처리방침","Política de privacidade")); return; }
+  if(e.target.closest("#pLic")){ showDoc("licenses.html",L("오픈소스 라이선스","Licenças open source")); return; }
+});
+function showDoc(file,title){
+  openModal(`<h3>${title}</h3><iframe src="${file}#${local.lang}" style="width:100%;height:62vh;border:1px solid var(--line);border-radius:12px;background:#fff"></iframe>
+    <div class="two"><button class="btn-ghost" id="mCancel">${L("닫기","Fechar")}</button><button class="btn-ghost" id="dWeb">🌐 ${L("웹에서 보기","Abrir na web")}</button></div>`);
+  $("mCancel").onclick=closeModal; $("dWeb").onclick=()=>openUrl(file==="privacy.html"?POLICY_URL:POLICY_URL.replace("privacy","licenses"));
+}
+// ---- 처음 한 번: 안내 + 동의 (마이크·AI·음식 추정) ----
+function firstRun(){
+  if(local.welcomed) return;
+  openModal(`<h3>🏠 ${L("집 도우미를 쓰기 전에","Antes de começar")}</h3>
+  <div class="kstep">
+   🎤 <b>${L("마이크","Microfone")}</b> — ${L("🎤를 누를 때만 말소리를 글자로 바꿔요. 계속 듣지 않아요.","Só escuta quando você toca no 🎤.")}<br>
+   🤖 <b>${L("구글 AI (선택)","IA do Google (opcional)")}</b> — ${L("앱이 모르는 말, 영수증 사진, 질문을 더 잘 알아듣게 구글 AI(Gemini)로 보내요. 구글 약관에 따라 처리돼요. 일기는 보내지 않아요.","Frases que o app não entende, fotos de cupom e perguntas podem ir para a IA do Google (Gemini), conforme os termos do Google. O diário não é enviado.")}<br>
+   🥬 <b>${L("신선 기간","Validade")}</b> — ${L("평균 추정이에요. 먹기 전에 꼭 직접 확인하세요.","É uma estimativa. Confira sempre antes de comer.")}<br>
+   💾 ${L("데이터는 이 핸드폰에 저장되고, 설정에서 언제든 모두 지울 수 있어요.","Os dados ficam neste celular e podem ser apagados em Ajustes.")}
+  </div>
+  <p class="muted"><a href="#" id="wPol">📄 ${L("개인정보처리방침 보기","Ver política de privacidade")}</a></p>
+  <button class="btn-green full" id="wYes" style="margin-top:6px">${L("AI 사용에 동의하고 시작","Concordo com a IA e começar")}</button>
+  <button class="btn-ghost full" id="wNo" style="margin-top:8px">${L("AI 없이 시작 (핸드폰 안에서만)","Começar sem IA (só no celular)")}</button>`);
+  const done=c=>{local.aiConsent=c;local.welcomed=true;saveLocal();closeModal();renderPriv();};
+  $("wYes").onclick=()=>done(true); $("wNo").onclick=()=>done(false);
+  $("wPol").onclick=ev=>{ev.preventDefault();showDoc("privacy.html",L("개인정보처리방침","Política de privacidade"));
+    const back=document.createElement("button");back.className="btn-green full";back.style.marginTop="8px";back.textContent=L("← 돌아가기","← Voltar");back.onclick=()=>firstRun();modal.appendChild(back);};
+}
 // ---- 말하기: 멈춤을 누를 때까지 계속 듣기 ----
 let voiceOn=false, voiceTarget="say", voiceBase="";
 const voiceEl=()=>(voiceTarget==="diary"||voiceTarget==="diaryAuto")?$("diaryText"):$("say");
@@ -1600,6 +1653,7 @@ function friendSaid(text){
   onSmart();
 }
 window.onAppOpen=mode=>{
+  if(!local.welcomed) return;   // 처음 안내(마이크·AI 동의)를 먼저 보여 줌
   mode=mode||(local.voiceOnOpen?"talk":""); if(!mode||!APP) return;
   closeModal(); showTab("v-home");
   if(mode==="diary"){ diaryDate=today(); renderDiary(); $("diaryCard").scrollIntoView({behavior:"smooth"}); speak(L("오늘 일기를 말씀하세요","Conte como foi seu dia")); setTimeout(()=>startVoice("diaryAuto"),1700); }
@@ -1610,6 +1664,7 @@ applyLang();
 render();
 renderFriend();
 pushAlarm();
+firstRun();
 save(true); // 처음 열 때도 핸드폰 알림 목록 맞추기
 // 앱을 열었을 때 (오케이 구글로 열었거나 바로가기)
 setTimeout(()=>{ if(APP){ let m=""; try{m=Android.launchMode();}catch(e){} if(m!=="none") window.onAppOpen(m); } },600);

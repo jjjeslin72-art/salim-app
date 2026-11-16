@@ -76,6 +76,8 @@ class MainActivity : Activity() {
             am.adjustStreamVolume(st, if (on) AudioManager.ADJUST_MUTE else AudioManager.ADJUST_UNMUTE, 0)
         } catch (e: Exception) { }
         muted = on
+        // 앱이 갑자기 꺼져도 다음에 켤 때 소리를 꼭 되돌리려고 기록
+        Notifier.prefs(this).edit().putBoolean("mutedByApp", on).apply()
     }
     private var ttsReady = false
 
@@ -125,6 +127,8 @@ class MainActivity : Activity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
         launch = modeOf(intent)
+        // 지난번에 듣는 중 앱이 꺼졌으면 꺼 둔 소리를 되돌림
+        if (Notifier.prefs(this).getBoolean("mutedByApp", false)) { muted = true; muteBeep(false) }
         Notifier.ensureChannel(this)
         Notifier.scheduleNext(this)
 
